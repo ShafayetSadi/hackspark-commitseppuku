@@ -48,3 +48,6 @@ mongo-data/
 
 .claude
 .codex
+
+# API documentation
+api-docs/
