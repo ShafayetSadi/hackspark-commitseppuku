@@ -15,6 +15,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Hackspark Frontend",
   description: "Frontend for Hackspark auth flows via the API gateway",
+  icons: {
+    icon: "/company-logo.svg",
+  },
 };
 
 export default function RootLayout({
