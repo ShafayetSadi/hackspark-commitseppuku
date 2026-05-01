@@ -6,8 +6,11 @@ from rental_service.services.central_api import get_central_client
 from rental_service.services.rentals import (
     get_kth_busiest_date,
     get_longest_free_streak,
+    get_merged_feed,
     get_product_availability,
     get_user_top_categories,
+    parse_merged_feed_product_ids,
+    require_merged_feed_limit,
 )
 from rental_service.services.rentals import (
     list_products as list_products_data,
@@ -116,5 +119,19 @@ async def free_streak(
         get_central_client(settings),
         product_id=product_id,
         year=_parse_int_param(year, field_name="year"),
+    )
+    return JSONResponse(content=data, status_code=200)
+
+
+@router.get("/merged-feed")
+async def merged_feed(
+    product_ids: str = Query(alias="productIds"),
+    limit: str = Query(),
+    settings: RentalSettings = Depends(get_settings),
+):
+    data = await get_merged_feed(
+        get_central_client(settings),
+        product_ids=parse_merged_feed_product_ids(product_ids),
+        limit=require_merged_feed_limit(_parse_int_param(limit, field_name="limit")),
     )
     return JSONResponse(content=data, status_code=200)

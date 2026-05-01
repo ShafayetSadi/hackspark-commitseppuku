@@ -9,6 +9,7 @@ service RentalService {
   rpc GetKthBusiestDate(KthBusiestDateRequest) returns (KthBusiestDateResponse);
   rpc GetUserTopCategories(UserTopCategoriesRequest) returns (UserTopCategoriesResponse);
   rpc GetLongestFreeStreak(LongestFreeStreakRequest) returns (LongestFreeStreakResponse);
+  rpc GetMergedFeed(MergedFeedRequest) returns (MergedFeedResponse);
 }
 
 message ProductsQuery {
@@ -95,4 +96,22 @@ message LongestFreeStreakResponse {
   int32 product_id = 1;
   int32 year = 2;
   FreeStreak longest_free_streak = 3;
+}
+
+message MergedFeedRequest {
+  repeated int32 product_ids = 1;
+  int32 limit = 2;
+}
+
+message FeedRental {
+  int32 rental_id = 1;
+  int32 product_id = 2;
+  string rental_start = 3;
+  string rental_end = 4;
+}
+
+message MergedFeedResponse {
+  repeated int32 product_ids = 1;
+  int32 limit = 2;
+  repeated FeedRental feed = 3;
 }

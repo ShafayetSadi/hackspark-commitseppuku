@@ -1,0 +1,98 @@
+from __future__ import annotations
+
+from fastapi import Request
+
+
+def build_request(path: str, query_string: str = "") -> Request:
+    async def receive():
+        return {"type": "http.request", "body": b"", "more_body": False}
+
+    scope = {
+        "type": "http",
+        "method": "GET",
+        "path": path,
+        "query_string": query_string.encode(),
+        "state": {},
+        "headers": [],
+    }
+    return Request(scope, receive=receive)
+
+
+async def test_gateway_peak_window_route_maps_grpc_response(gateway_runtime, monkeypatch):
+    class Stub:
+        async def GetPeakWindow(self, request):
+            assert request.from_month == "2024-01"
+            assert request.to_month == "2024-06"
+            return gateway_runtime.api_routes.analytics_pb2.AnalyticsResponse(
+                json_data=(
+                    '{"from":"2024-01","to":"2024-06","peakWindow":'
+                    '{"from":"2024-03-10","to":"2024-03-16","totalRentals":2847}}'
+                )
+            )
+
+    monkeypatch.setattr(
+        gateway_runtime.api_routes.analytics_client, "get_stub", lambda _addr: Stub()
+    )
+
+    settings = gateway_runtime.core_config.get_settings()
+    response = await gateway_runtime.api_routes.get_peak_window(
+        build_request("/analytics/peak-window", "from=2024-01&to=2024-06"),
+        settings=settings,
+    )
+
+    assert response.body == (
+        b'{"from":"2024-01","to":"2024-06","peakWindow":{"from":"2024-03-10",'
+        b'"to":"2024-03-16","totalRentals":2847}}'
+    )
+
+
+async def test_gateway_merged_feed_route_maps_grpc_response(gateway_runtime, monkeypatch):
+    class Stub:
+        async def GetMergedFeed(self, request):
+            assert list(request.product_ids) == [12, 47, 88]
+            assert request.limit == 3
+            return gateway_runtime.api_routes.rental_pb2.MergedFeedResponse(
+                product_ids=[12, 47, 88],
+                limit=3,
+                feed=[
+                    gateway_runtime.api_routes.rental_pb2.FeedRental(
+                        rental_id=5041,
+                        product_id=88,
+                        rental_start="2024-01-01",
+                        rental_end="2024-01-05",
+                    ),
+                    gateway_runtime.api_routes.rental_pb2.FeedRental(
+                        rental_id=12900,
+                        product_id=12,
+                        rental_start="2024-01-02",
+                        rental_end="2024-01-09",
+                    ),
+                ],
+            )
+
+    monkeypatch.setattr(gateway_runtime.api_routes.rental_client, "get_stub", lambda _addr: Stub())
+
+    settings = gateway_runtime.core_config.get_settings()
+    response = await gateway_runtime.api_routes.merged_feed(
+        build_request("/rentals/merged-feed", "productIds=12,47,88&limit=3"),
+        settings=settings,
+    )
+
+    assert response == {
+        "productIds": [12, 47, 88],
+        "limit": 3,
+        "feed": [
+            {
+                "rentalId": 5041,
+                "productId": 88,
+                "rentalStart": "2024-01-01",
+                "rentalEnd": "2024-01-05",
+            },
+            {
+                "rentalId": 12900,
+                "productId": 12,
+                "rentalStart": "2024-01-02",
+                "rentalEnd": "2024-01-09",
+            },
+        ],
+    }

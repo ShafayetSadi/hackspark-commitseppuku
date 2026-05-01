@@ -10,6 +10,7 @@ from rental_service.services.central_api import get_central_client
 from rental_service.services.rentals import (
     get_kth_busiest_date,
     get_longest_free_streak,
+    get_merged_feed,
     get_product_availability,
     get_user_top_categories,
     list_products,
@@ -205,4 +206,38 @@ class RentalServicer(rental_pb2_grpc.RentalServiceServicer):
             await self._abort_from_http_error(context, exc)
         except Exception as exc:
             logger.error("longest_free_streak_error", error=str(exc))
+            await context.abort(grpc.StatusCode.UNAVAILABLE, str(exc))
+
+    async def GetMergedFeed(self, request: Any, context: grpc.aio.ServicerContext):
+        logger.info(
+            "grpc_get_merged_feed", product_ids=list(request.product_ids), limit=request.limit
+        )
+        try:
+            data = await get_merged_feed(
+                get_central_client(self._settings_for_client()),
+                product_ids=list(request.product_ids),
+                limit=request.limit,
+            )
+            return RENTAL_PB2.MergedFeedResponse(
+                product_ids=data["productIds"],
+                limit=data["limit"],
+                feed=[
+                    RENTAL_PB2.FeedRental(
+                        rental_id=item["rentalId"],
+                        product_id=item["productId"],
+                        rental_start=item["rentalStart"],
+                        rental_end=item["rentalEnd"],
+                    )
+                    for item in data["feed"]
+                ],
+            )
+        except HTTPException as exc:
+            logger.error(
+                "merged_feed_error",
+                status_code=exc.status_code,
+                detail=str(exc.detail),
+            )
+            await self._abort_from_http_error(context, exc)
+        except Exception as exc:
+            logger.error("merged_feed_error", error=str(exc))
             await context.abort(grpc.StatusCode.UNAVAILABLE, str(exc))

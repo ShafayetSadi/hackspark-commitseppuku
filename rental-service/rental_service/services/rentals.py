@@ -24,10 +24,103 @@ from rental_service.utils.validation import (
 from shared.app_core.central_api import CentralAPIClient
 
 BATCH_SIZE = 50
+MAX_MERGED_FEED_PRODUCTS = 10
+MAX_MERGED_FEED_LIMIT = 100
 
 
 def _category_rank_key(category: str) -> tuple[int, ...]:
     return (*(-ord(char) for char in category), 1)
+
+
+def parse_merged_feed_product_ids(raw_product_ids: str) -> list[int]:
+    parts = [part.strip() for part in raw_product_ids.split(",")]
+    if not 1 <= len(parts) <= MAX_MERGED_FEED_PRODUCTS or any(part == "" for part in parts):
+        raise HTTPException(
+            status_code=400,
+            detail="productIds must be 1-10 comma-separated integers",
+        )
+
+    product_ids: list[int] = []
+    seen: set[int] = set()
+    for part in parts:
+        try:
+            product_id = int(part)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail="productIds must be 1-10 comma-separated integers",
+            ) from exc
+        if product_id <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="productIds must be 1-10 comma-separated integers",
+            )
+        if product_id not in seen:
+            seen.add(product_id)
+            product_ids.append(product_id)
+
+    return product_ids
+
+
+def require_merged_feed_limit(value: int) -> int:
+    if value <= 0 or value > MAX_MERGED_FEED_LIMIT:
+        raise HTTPException(status_code=400, detail="limit must be a positive integer <= 100")
+    return value
+
+
+def _normalize_feed_rental(rental: dict) -> dict:
+    rental_id = rental.get("id", rental.get("rentalId", 0))
+    product_id = rental.get("productId", rental.get("product_id", 0))
+    return {
+        "rentalId": int(rental_id),
+        "productId": int(product_id),
+        "rentalStart": str(rental["rentalStart"])[:10],
+        "rentalEnd": str(rental["rentalEnd"])[:10],
+    }
+
+
+def _feed_sort_key(item: dict) -> tuple[str, int, int]:
+    return (
+        str(item["rentalStart"]),
+        int(item["productId"]),
+        int(item["rentalId"]),
+    )
+
+
+def _merge_sorted_feeds(left: list[dict], right: list[dict], limit: int) -> list[dict]:
+    merged: list[dict] = []
+    left_index = 0
+    right_index = 0
+
+    while len(merged) < limit and left_index < len(left) and right_index < len(right):
+        if _feed_sort_key(left[left_index]) <= _feed_sort_key(right[right_index]):
+            merged.append(left[left_index])
+            left_index += 1
+        else:
+            merged.append(right[right_index])
+            right_index += 1
+
+    while len(merged) < limit and left_index < len(left):
+        merged.append(left[left_index])
+        left_index += 1
+
+    while len(merged) < limit and right_index < len(right):
+        merged.append(right[right_index])
+        right_index += 1
+
+    return merged
+
+
+def _merge_feed_groups(feeds: list[list[dict]], limit: int) -> list[dict]:
+    if not feeds:
+        return []
+    if len(feeds) == 1:
+        return feeds[0][:limit]
+
+    midpoint = len(feeds) // 2
+    left = _merge_feed_groups(feeds[:midpoint], limit)
+    right = _merge_feed_groups(feeds[midpoint:], limit)
+    return _merge_sorted_feeds(left, right, limit)
 
 
 async def list_products(
@@ -218,4 +311,33 @@ async def get_longest_free_streak(
             "to": format_date(best_end),
             "days": gap_length_days((best_start, best_end)),
         },
+    }
+
+
+async def get_merged_feed(
+    client: CentralAPIClient,
+    *,
+    product_ids: list[int],
+    limit: int,
+) -> dict:
+    require_merged_feed_limit(limit)
+    if not 1 <= len(product_ids) <= MAX_MERGED_FEED_PRODUCTS:
+        raise HTTPException(status_code=400, detail="productIds must contain 1-10 integers")
+
+    deduped_product_ids = list(dict.fromkeys(product_ids))
+
+    feeds: list[list[dict]] = []
+    for product_id in deduped_product_ids:
+        rentals = await fetch_all_pages(
+            client,
+            "/api/data/rentals",
+            params={"product_id": str(product_id)},
+            max_items=limit,
+        )
+        feeds.append([_normalize_feed_rental(rental) for rental in rentals])
+
+    return {
+        "productIds": deduped_product_ids,
+        "limit": limit,
+        "feed": _merge_feed_groups(feeds, limit),
     }

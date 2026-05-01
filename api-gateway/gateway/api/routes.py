@@ -285,6 +285,39 @@ async def free_streak(
         raise grpc_to_http_exception(exc) from exc
 
 
+@router.get("/rentals/merged-feed")
+async def merged_feed(request: Request, settings: GatewaySettings = Depends(get_settings)):
+    product_ids = request.query_params.get("productIds", "")
+    limit = _parse_query_int(request.query_params.get("limit", "0"), field_name="limit")
+    stub = rental_client.get_stub(settings.rental_service_addr)
+    try:
+        resp = await stub.GetMergedFeed(
+            RENTAL_PB2.MergedFeedRequest(
+                product_ids=[
+                    _parse_query_int(value.strip(), field_name="productIds")
+                    for value in product_ids.split(",")
+                    if value.strip()
+                ],
+                limit=limit,
+            )
+        )
+        return {
+            "productIds": list(resp.product_ids),
+            "limit": resp.limit,
+            "feed": [
+                {
+                    "rentalId": item.rental_id,
+                    "productId": item.product_id,
+                    "rentalStart": item.rental_start,
+                    "rentalEnd": item.rental_end,
+                }
+                for item in resp.feed
+            ],
+        }
+    except grpc.RpcError as exc:
+        raise grpc_to_http_exception(exc) from exc
+
+
 # ── Analytics ─────────────────────────────────────────────────────────────────
 
 
@@ -318,6 +351,20 @@ async def get_recommendations(request: Request, settings: GatewaySettings = Depe
     try:
         resp = await stub.GetRecommendations(
             ANALYTICS_PB2.RecommendationsRequest(category=category, limit=limit)
+        )
+        return JSONResponse(content=json.loads(resp.json_data))
+    except grpc.RpcError as exc:
+        raise grpc_to_http_exception(exc) from exc
+
+
+@router.get("/analytics/peak-window")
+async def get_peak_window(request: Request, settings: GatewaySettings = Depends(get_settings)):
+    from_month = request.query_params.get("from", "")
+    to_month = request.query_params.get("to", "")
+    stub = analytics_client.get_stub(settings.analytics_service_addr)
+    try:
+        resp = await stub.GetPeakWindow(
+            ANALYTICS_PB2.PeakWindowRequest(from_month=from_month, to_month=to_month)
         )
         return JSONResponse(content=json.loads(resp.json_data))
     except grpc.RpcError as exc:

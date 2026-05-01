@@ -23,6 +23,7 @@ async def fetch_all_pages(
     params: dict[str, str] | None = None,
     *,
     page_limit: int = DEFAULT_PAGE_LIMIT,
+    max_items: int | None = None,
 ) -> list[dict]:
     page = 1
     items: list[dict] = []
@@ -36,6 +37,8 @@ async def fetch_all_pages(
             return items
 
         items.extend(batch)
+        if max_items is not None and len(items) >= max_items:
+            return items[:max_items]
 
         total_pages = payload.get("totalPages")
         if isinstance(total_pages, int):

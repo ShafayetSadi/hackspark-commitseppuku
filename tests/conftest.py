@@ -189,6 +189,28 @@ def gateway_runtime(gateway_env):
 
 
 @pytest.fixture
+def analytics_env() -> dict[str, str]:
+    return {
+        "APP_ENV": "dev",
+        "JWT_SECRET": "test-secret",
+        "CENTRAL_API_TOKEN": "test-token",
+    }
+
+
+@pytest.fixture
+def analytics_runtime(analytics_env):
+    return load_runtime(
+        ROOT / "analytics-service",
+        analytics_env,
+        {
+            "api_routes": "analytics_service.api.routes",
+            "core_config": "analytics_service.core.config",
+            "analytics_logic": "analytics_service.services.analytics",
+        },
+    )
+
+
+@pytest.fixture
 def rental_env() -> dict[str, str]:
     return {
         "APP_ENV": "dev",

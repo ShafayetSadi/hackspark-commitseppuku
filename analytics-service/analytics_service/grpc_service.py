@@ -2,9 +2,11 @@ import json
 
 import grpc
 import grpc.aio
+from fastapi import HTTPException
 
 from analytics_service.core.config import get_settings
 from analytics_service.services.analytics import (
+    compute_peak_window,
     compute_recommendations,
     compute_surge,
     compute_trends,
@@ -28,6 +30,22 @@ class AnalyticsServicer(analytics_pb2_grpc.AnalyticsServiceServicer):
             max_calls=self._settings.central_api_rate_limit,
             window_seconds=self._settings.central_api_rate_window_seconds,
         )
+
+    async def _abort_from_http_error(
+        self, context: grpc.aio.ServicerContext, exc: HTTPException
+    ) -> None:
+        status_map = {
+            400: grpc.StatusCode.INVALID_ARGUMENT,
+            404: grpc.StatusCode.NOT_FOUND,
+            401: grpc.StatusCode.UNAUTHENTICATED,
+            409: grpc.StatusCode.ALREADY_EXISTS,
+            429: grpc.StatusCode.RESOURCE_EXHAUSTED,
+            502: grpc.StatusCode.UNAVAILABLE,
+            504: grpc.StatusCode.DEADLINE_EXCEEDED,
+        }
+        status = status_map.get(exc.status_code, grpc.StatusCode.INTERNAL)
+        detail = json.dumps(exc.detail) if exc.detail else f"HTTP {exc.status_code}"
+        await context.abort(status, detail)
 
     async def GetTrends(
         self, request: analytics_pb2.TrendsRequest, context: grpc.aio.ServicerContext
@@ -61,4 +79,26 @@ class AnalyticsServicer(analytics_pb2_grpc.AnalyticsServiceServicer):
             return analytics_pb2.AnalyticsResponse(json_data=json.dumps(data))
         except Exception as exc:
             logger.error("recommendations_error", error=str(exc))
+            await context.abort(grpc.StatusCode.INTERNAL, "Analytics computation failed")
+
+    async def GetPeakWindow(
+        self, request: analytics_pb2.PeakWindowRequest, context: grpc.aio.ServicerContext
+    ):
+        logger.info(
+            "grpc_get_peak_window",
+            from_month=request.from_month,
+            to_month=request.to_month,
+        )
+        try:
+            data = await compute_peak_window(
+                self._client(),
+                from_month=request.from_month,
+                to_month=request.to_month,
+            )
+            return analytics_pb2.AnalyticsResponse(json_data=json.dumps(data))
+        except HTTPException as exc:
+            logger.error("peak_window_error", status_code=exc.status_code, detail=str(exc.detail))
+            await self._abort_from_http_error(context, exc)
+        except Exception as exc:
+            logger.error("peak_window_error", error=str(exc))
             await context.abort(grpc.StatusCode.INTERNAL, "Analytics computation failed")
