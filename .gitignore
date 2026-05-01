@@ -45,3 +45,6 @@ logs/
 # DB data volumes (if anyone bind-mounts locally)
 postgres-data/
 mongo-data/
+
+.claude
+.codex

@@ -1,0 +1,26 @@
+groups:
+  - name: hackspark-observability
+    rules:
+      - record: hackspark:request_rate_by_service:5m
+        expr: sum by(service) (rate(hackspark_http_requests_total[5m]))
+
+      - record: hackspark:error_rate_by_service:5m
+        expr: sum by(service) (rate(hackspark_http_requests_total{status_code=~"5.."}[5m]))
+
+      - alert: HacksparkTargetDown
+        expr: up{job=~"prometheus|api-gateway|auth-service|item-service|ai-agent-service|cadvisor"} == 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Hackspark scrape target is down"
+          description: "Prometheus has been unable to scrape {{ $labels.job }} for at least 1 minute."
+
+      - alert: HacksparkHigh5xxRate
+        expr: sum by(service) (rate(hackspark_http_requests_total{status_code=~"5.."}[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Hackspark service is serving 5xx responses"
+          description: "{{ $labels.service }} is returning more than 0.1 5xx responses per second over 5 minutes."
