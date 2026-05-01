@@ -7,5 +7,6 @@ motor==3.7.0
 openai==1.58.1
 protobuf==5.28.1
 pydantic-settings==2.10.1
+redis==6.4.0
 structlog==25.4.0
 uvicorn[standard]==0.35.0

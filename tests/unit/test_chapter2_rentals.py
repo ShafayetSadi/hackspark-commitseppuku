@@ -47,6 +47,49 @@ def test_list_products_invalid_category_returns_helpful_400(rental_runtime, monk
         raise AssertionError("Expected HTTPException")
 
 
+def test_list_products_forwards_extra_query_params(rental_runtime, monkeypatch):
+    async def fake_categories(_client):
+        return type("Snapshot", (), {"ordered": ["TOOLS"], "values": {"TOOLS"}})()
+
+    monkeypatch.setattr(rental_runtime.rental_logic, "get_categories_cached", fake_categories)
+    client = FakeCentralClient(
+        {
+            "/api/data/products": {
+                "data": [],
+                "page": 2,
+                "limit": 20,
+                "total": 0,
+                "totalPages": 0,
+            }
+        }
+    )
+
+    import asyncio
+
+    asyncio.run(
+        rental_runtime.rental_logic.list_products(
+            client,
+            category="TOOLS",
+            page="2",
+            limit="20",
+            extra_params={"owner_id": "7", "sort": "price_desc"},
+        )
+    )
+
+    assert client.calls == [
+        (
+            "/api/data/products",
+            {
+                "owner_id": "7",
+                "sort": "price_desc",
+                "category": "TOOLS",
+                "page": "2",
+                "limit": "20",
+            },
+        )
+    ]
+
+
 def test_product_availability_merges_busy_periods_and_finds_free_windows(rental_runtime):
     client = FakeCentralClient(
         {

@@ -9,7 +9,7 @@ Agent-facing companion to `README.md`. Follow these rules exactly when working i
 RentPi hackathon — FastAPI HTTP gateway + 4 services that expose HTTP status routes and gRPC business APIs.
 
 | Folder | Docker service | Transport | Port | Responsibility |
-|--------|---------------|-----------|------|----------------|
+| ------ | ------------- | --------- | ---- | -------------- |
 | `api-gateway/` | `api-gateway` | HTTP (FastAPI) | 8000 | JWT validation, HTTP→gRPC translation, `/status` aggregation |
 | `user-service/` | `user-service` | HTTP + gRPC | 8001 / 50051 | Auth (register/login/me), Postgres, Alembic |
 | `rental-service/` | `rental-service` | HTTP + gRPC | 8002 / 50052 | Products/availability — proxies Central API |
@@ -18,6 +18,7 @@ RentPi hackathon — FastAPI HTTP gateway + 4 services that expose HTTP status r
 | `frontend/` | `frontend` | HTTP | 3000 | Next.js UI, talks only through api-gateway |
 
 Python packages **inside** each folder keep their original names:
+
 - `api-gateway/gateway/`
 - `user-service/auth_service/`
 - `agentic-service/ai_agent_service/`
@@ -38,6 +39,7 @@ docker compose up --build     # starts all services + postgres + mongodb
 ```
 
 Local dev (no Docker):
+
 ```bash
 uv sync
 make up-build
@@ -48,7 +50,7 @@ make up-build
 ## Developer commands
 
 | Command | What it does |
-|---------|-------------|
+| ------- | ----------- |
 | `make up` | Start stack |
 | `make up-build` | Start stack with rebuild |
 | `make down` | Stop stack |
@@ -73,7 +75,7 @@ Run one test: `uv run python -m pytest tests/path/to_test.py::test_name`
 
 ### Request flow
 
-```
+```text
 Client → api-gateway:8000 (HTTP/JSON)
             → HTTP /<service>/status → service:800x /status
             → gRPC → user-service:50051       → Postgres

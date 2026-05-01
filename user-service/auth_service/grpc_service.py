@@ -31,7 +31,13 @@ class UserServicer(user_pb2_grpc.UserServiceServicer):
         raise RuntimeError("Database session unavailable")
 
     def _central_client(self) -> CentralAPIClient:
-        return CentralAPIClient(self._settings.central_api_url, self._settings.central_api_token)
+        return CentralAPIClient(
+            self._settings.central_api_url,
+            self._settings.central_api_token,
+            redis_url=self._settings.central_api_redis_url,
+            max_calls=self._settings.central_api_rate_limit,
+            window_seconds=self._settings.central_api_rate_window_seconds,
+        )
 
     async def Register(self, request: Any, context: grpc.aio.ServicerContext):
         logger.info("grpc_register", email=request.email)

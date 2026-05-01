@@ -1,6 +1,7 @@
 import grpc
 import pytest
 from fastapi import Request
+from fastapi.responses import JSONResponse
 
 
 class FakeRpcError(grpc.RpcError):
@@ -103,19 +104,43 @@ async def test_gateway_invalid_category_error_preserves_structured_detail(
                 '{"error":"Invalid category \'BAD\'","validCategories":["TOOLS","OUTDOOR"]}',
             )
 
-        monkeypatch.setattr(
-            gateway_runtime.api_routes.rental_client, "get_stub", lambda _addr: Stub()
-        )
+    monkeypatch.setattr(gateway_runtime.api_routes.rental_client, "get_stub", lambda _addr: Stub())
 
-    with pytest.raises(gateway_runtime.api_routes.HTTPException) as exc_info:
-        settings = gateway_runtime.core_config.get_settings()
-        await gateway_runtime.api_routes.list_products(
-            build_request("/rentals/products", "category=BAD"),
-            settings=settings,
-        )
+    settings = gateway_runtime.core_config.get_settings()
+    response = await gateway_runtime.api_routes.list_products(
+        build_request("/rentals/products", "category=BAD"),
+        settings=settings,
+    )
 
-    assert exc_info.value.status_code == 400
-    assert exc_info.value.detail == {
-        "error": "Invalid category 'BAD'",
-        "validCategories": ["TOOLS", "OUTDOOR"],
-    }
+    assert isinstance(response, JSONResponse)
+    assert response.status_code == 400
+    assert response.body == (
+        b'{"error":"Invalid category \'BAD\'","validCategories":["TOOLS","OUTDOOR"]}'
+    )
+
+
+@pytest.mark.asyncio
+async def test_gateway_products_route_forwards_extra_query_params(gateway_runtime, monkeypatch):
+    class Stub:
+        async def ListProducts(self, request):
+            assert request.category == "TOOLS"
+            assert request.page == "2"
+            assert request.limit == "20"
+            assert dict(request.extra_params) == {"owner_id": "7", "sort": "price_desc"}
+            return gateway_runtime.api_routes.rental_pb2.ProductsResponse(
+                json_data='{"data":[],"page":2,"limit":20,"total":0,"totalPages":0}'
+            )
+
+    monkeypatch.setattr(gateway_runtime.api_routes.rental_client, "get_stub", lambda _addr: Stub())
+
+    settings = gateway_runtime.core_config.get_settings()
+    response = await gateway_runtime.api_routes.list_products(
+        build_request(
+            "/rentals/products",
+            "category=TOOLS&page=2&limit=20&owner_id=7&sort=price_desc",
+        ),
+        settings=settings,
+    )
+
+    assert isinstance(response, JSONResponse)
+    assert response.status_code == 200
