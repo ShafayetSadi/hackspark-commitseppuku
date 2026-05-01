@@ -18,7 +18,7 @@ export async function POST(request: NextRequest) {
   const payload = (await request.json()) as ChatPayload;
   const message = (payload.query ?? payload.message ?? "").trim();
   if (!message) {
-    return NextResponse.json({ detail: "Message is required." }, { status: 400 });
+    return NextResponse.json({ detail: "query must be at least 1 character." }, { status: 422 });
   }
 
   const token = request.cookies.get(AUTH_TOKEN_COOKIE)?.value;
