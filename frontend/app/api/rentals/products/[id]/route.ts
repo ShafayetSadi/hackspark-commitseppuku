@@ -4,10 +4,11 @@ import { getGatewayUrl, readErrorDetail } from "@/lib/auth-service";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   try {
-    const upstream = await fetch(`${getGatewayUrl()}/rentals/products/${params.id}`, {
+    const upstream = await fetch(`${getGatewayUrl()}/rentals/products/${id}`, {
       method: "GET",
       cache: "no-store",
     });

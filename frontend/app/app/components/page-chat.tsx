@@ -149,8 +149,8 @@ export function Chat() {
       const payload = (await response.json()) as {
         messages?: Array<{ role?: ChatRole; content?: string; message?: string }>;
       };
-      const nextMessages = (payload.messages ?? [])
-        .map((m) => ({
+      const nextMessages: ChatMessage[] = (payload.messages ?? [])
+        .map((m): ChatMessage => ({
           role: m.role === "assistant" ? "assistant" : "user",
           content: m.content ?? m.message ?? "",
         }))

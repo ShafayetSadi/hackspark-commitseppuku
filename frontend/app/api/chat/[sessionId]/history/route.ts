@@ -4,11 +4,12 @@ import { getGatewayUrl, readErrorDetail } from "@/lib/auth-service";
 
 export async function GET(
   _request: Request,
-  { params }: { params: { sessionId: string } },
+  { params }: { params: Promise<{ sessionId: string }> },
 ) {
+  const { sessionId } = await params;
   try {
     const upstream = await fetch(
-      `${getGatewayUrl()}/chat/${params.sessionId}/history`,
+      `${getGatewayUrl()}/chat/${sessionId}/history`,
       {
         method: "GET",
         cache: "no-store",

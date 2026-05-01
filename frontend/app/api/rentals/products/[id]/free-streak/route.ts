@@ -4,13 +4,14 @@ import { getGatewayUrl, readErrorDetail } from "@/lib/auth-service";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
+  const { id } = await params;
   const query = request.nextUrl.searchParams.toString();
   const suffix = query ? `?${query}` : "";
   try {
     const upstream = await fetch(
-      `${getGatewayUrl()}/rentals/products/${params.id}/free-streak${suffix}`,
+      `${getGatewayUrl()}/rentals/products/${id}/free-streak${suffix}`,
       {
         method: "GET",
         cache: "no-store",

@@ -4,10 +4,11 @@ import { getGatewayUrl, readErrorDetail } from "@/lib/auth-service";
 
 export async function DELETE(
   _request: Request,
-  { params }: { params: { sessionId: string } },
+  { params }: { params: Promise<{ sessionId: string }> },
 ) {
+  const { sessionId } = await params;
   try {
-    const upstream = await fetch(`${getGatewayUrl()}/chat/${params.sessionId}`, {
+    const upstream = await fetch(`${getGatewayUrl()}/chat/${sessionId}`, {
       method: "DELETE",
       cache: "no-store",
     });
