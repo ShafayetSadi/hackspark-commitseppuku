@@ -37,21 +37,29 @@ class PromptDrivenLLM(BaseLLM):
         prompt = (
             "Decide whether a tool is needed for the current user message.\n"
             "Return JSON only with this exact shape:\n"
-            '{"tool_name": string|null, "arguments": object}\n\n'
-            "Choose a tool only when external rental analytics or availability data is needed.\n"
-            "If no tool is needed, return {\"tool_name\": null, \"arguments\": {}}.\n\n"
+            '{"tool_name": string|null, "arguments": object, "clarification": string|null}\n\n'
+            "Rules:\n"
+            "1. Choose a tool only when external rental analytics or availability data is needed.\n"
+            "2. If no tool is needed, return {\"tool_name\": null, \"arguments\": {}, \"clarification\": null}.\n"
+            "3. If a tool IS needed but required arguments are missing from the user message, "
+            "set \"clarification\" to a SHORT, friendly, conversational follow-up question asking only for the "
+            "missing information. Do NOT sound robotic. Do NOT repeat all the field names. "
+            "Set \"tool_name\" to the intended tool and \"arguments\" to whatever was already provided.\n"
+            "4. If a tool is needed AND all required arguments are present, set \"clarification\" to null.\n\n"
             f"SESSION SUMMARY:\n{session_summary or 'No summary yet.'}\n\n"
             f"RECENT MESSAGES:\n{_render_messages(recent_messages)}\n\n"
             f"CURRENT MESSAGE:\n{current_message}\n\n"
             f"TOOLS:\n{json.dumps(tools)}"
         )
-        raw = await self._complete_text(_SYSTEM_PROMPT, prompt, max_tokens=180)
+        raw = await self._complete_text(_SYSTEM_PROMPT, prompt, max_tokens=220)
         data = _extract_json_object(raw)
         tool_name = data.get("tool_name")
         arguments = data.get("arguments", {})
+        clarification = data.get("clarification")
         return ToolDecision(
             tool_name=tool_name if isinstance(tool_name, str) and tool_name else None,
             arguments=arguments if isinstance(arguments, dict) else {},
+            clarification=clarification if isinstance(clarification, str) and clarification.strip() else None,
         )
 
     async def generate_final_answer(

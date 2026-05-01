@@ -1,3 +1,5 @@
+import re
+
 from ai_agent_service.services.llm.base import BaseLLM, ToolDecision
 
 
@@ -16,16 +18,57 @@ class MockLLM(BaseLLM):
         tools: list[dict],
     ) -> ToolDecision:
         lowered = current_message.lower()
+
         if "recommend" in lowered:
             return ToolDecision("get_recommendations", {"category": _extract_category(lowered)})
+
         if "availability" in lowered or "available" in lowered:
-            return ToolDecision("get_availability", {"subject": _extract_category(lowered)})
+            product_id = _extract_product_id(lowered)
+            from_date = _extract_date(lowered, "from")
+            to_date = _extract_date(lowered, "to")
+            args: dict[str, str] = {}
+            if product_id:
+                args["product_id"] = product_id
+            if from_date:
+                args["from_date"] = from_date
+            if to_date:
+                args["to_date"] = to_date
+            missing = [f for f in ("product_id", "from_date", "to_date") if f not in args]
+            if missing:
+                if "product_id" in missing:
+                    q = "Which product would you like to check availability for, and over what dates?"
+                else:
+                    q = f"What date range should I check for product {product_id}? (e.g. 2024-06-01 to 2024-06-30)"
+                return ToolDecision("get_availability", args, clarification=q)
+            return ToolDecision("get_availability", args)
+
         if "peak" in lowered or "busiest" in lowered:
-            return ToolDecision("get_peak_window", {"category": _extract_category(lowered)})
+            from_month = _extract_month(lowered, "from")
+            to_month = _extract_month(lowered, "to")
+            args = {}
+            if from_month:
+                args["from_month"] = from_month
+            if to_month:
+                args["to_month"] = to_month
+            if not from_month or not to_month:
+                return ToolDecision(
+                    "get_peak_window", args,
+                    clarification="What month range are you interested in for the peak window? (e.g. 2024-01 to 2024-06)",
+                )
+            return ToolDecision("get_peak_window", args)
+
         if "surge" in lowered or "spike" in lowered:
-            return ToolDecision("get_surge_days", {"category": _extract_category(lowered)})
+            month = _extract_month(lowered, "any")
+            if not month:
+                return ToolDecision(
+                    "get_surge_days", {},
+                    clarification="Which month should I pull surge data for? (e.g. 2024-06)",
+                )
+            return ToolDecision("get_surge_days", {"month": month})
+
         if any(keyword in lowered for keyword in ("top category", "best category", "growing", "growth")):
             return ToolDecision("get_top_category", {"region": _extract_category(lowered)})
+
         return ToolDecision(None, {})
 
     async def generate_final_answer(
@@ -85,3 +128,33 @@ def _extract_category(message: str) -> str:
         if category in message:
             return category
     return "tools"
+
+
+def _extract_product_id(message: str) -> str:
+    match = re.search(r"\bproduct\s+(\d+)\b|\bid[:\s]+(\d+)\b|#(\d+)", message)
+    if match:
+        return next(g for g in match.groups() if g is not None)
+    bare = re.search(r"\b(\d+)\b", message)
+    return bare.group(1) if bare else ""
+
+
+def _extract_date(message: str, _position: str) -> str:
+    matches = re.findall(r"\b(\d{4}-\d{2}-\d{2})\b", message)
+    if not matches:
+        return ""
+    if _position == "from":
+        return matches[0]
+    if _position == "to" and len(matches) >= 2:
+        return matches[1]
+    return ""
+
+
+def _extract_month(message: str, _position: str) -> str:
+    matches = re.findall(r"\b(\d{4}-\d{2})\b", message)
+    if not matches:
+        return ""
+    if _position in ("from", "any"):
+        return matches[0]
+    if _position == "to" and len(matches) >= 2:
+        return matches[1]
+    return ""

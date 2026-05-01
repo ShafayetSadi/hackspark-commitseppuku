@@ -64,8 +64,25 @@ async def process_chat(
         session_id=sid,
         tool_selected=tool_decision.tool_name,
         tool_arguments=tool_decision.arguments,
+        needs_clarification=bool(tool_decision.clarification),
         decision_ms=round((time.monotonic() - t_tool) * 1000),
     )
+
+    # If the LLM knows which tool to call but is missing arguments, ask the user
+    # conversationally rather than attempting a doomed tool call.
+    if tool_decision.clarification:
+        answer = tool_decision.clarification
+        sources = ["clarification"]
+        confidence = 0.85
+        logger.info("chat_clarification_requested", session_id=sid, tool=tool_decision.tool_name)
+        await session_store.append_message(sid, "user", query)
+        await session_store.append_message(sid, "assistant", answer)
+        updated_history = await session_store.load_recent_messages(sid, settings.summary_message_window)
+        updated_summary = await llm.summarize_session(summary, updated_history)
+        await session_store.update_summary(sid, updated_summary)
+        await session_store.touch_meta(sid)
+        logger.info("chat_turn_complete", session_id=sid, sources=sources, confidence=confidence, total_ms=round((time.monotonic() - t_start) * 1000))
+        return ChatResult(answer=answer, sources=sources, confidence=confidence, session_id=sid)
 
     tool_payload: dict | None = None
     sources = ["session-memory"]

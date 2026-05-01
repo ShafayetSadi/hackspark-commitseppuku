@@ -8,6 +8,7 @@ from dataclasses import dataclass
 class ToolDecision:
     tool_name: str | None
     arguments: dict[str, str]
+    clarification: str | None = None
 
 
 class BaseLLM(ABC):
