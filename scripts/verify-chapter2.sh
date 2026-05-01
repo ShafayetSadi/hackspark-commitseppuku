@@ -4,6 +4,7 @@ set -eu
 COMPOSE_CMD=${COMPOSE_CMD:-"docker compose -f docker-compose.yml"}
 BASE_URL=${BASE_URL:-"http://localhost:8000"}
 UV_CACHE_DIR=${UV_CACHE_DIR:-"/tmp/uv-cache"}
+REQUEST_DELAY_SECONDS=${REQUEST_DELAY_SECONDS:-5}
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
 
@@ -73,6 +74,10 @@ http_request() {
         -o "$body_file"
     fi
   fi
+
+  request_status=$?
+  sleep "$REQUEST_DELAY_SECONDS"
+  return "$request_status"
 }
 
 http_status() {

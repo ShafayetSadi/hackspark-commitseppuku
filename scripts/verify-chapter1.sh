@@ -3,6 +3,7 @@ set -eu
 
 COMPOSE_CMD=${COMPOSE_CMD:-"docker compose -f docker-compose.yml"}
 BASE_URL=${BASE_URL:-"http://localhost:8000"}
+REQUEST_DELAY_SECONDS=${REQUEST_DELAY_SECONDS:-5}
 TMP_DIR=$(mktemp -d)
 trap 'rm -rf "$TMP_DIR"' EXIT HUP INT TERM
 
@@ -43,18 +44,39 @@ http_request() {
   body=${3-}
   headers_file=$4
   body_file=$5
+  auth_header=${6-}
 
   if [ -n "$body" ]; then
-    curl -sS -X "$method" "$url" \
-      -H "Content-Type: application/json" \
-      -D "$headers_file" \
-      -o "$body_file" \
-      --data "$body"
+    if [ -n "$auth_header" ]; then
+      curl -sS -X "$method" "$url" \
+        -H "Content-Type: application/json" \
+        -H "$auth_header" \
+        -D "$headers_file" \
+        -o "$body_file" \
+        --data "$body"
+    else
+      curl -sS -X "$method" "$url" \
+        -H "Content-Type: application/json" \
+        -D "$headers_file" \
+        -o "$body_file" \
+        --data "$body"
+    fi
   else
-    curl -sS -X "$method" "$url" \
-      -D "$headers_file" \
-      -o "$body_file"
+    if [ -n "$auth_header" ]; then
+      curl -sS -X "$method" "$url" \
+        -H "$auth_header" \
+        -D "$headers_file" \
+        -o "$body_file"
+    else
+      curl -sS -X "$method" "$url" \
+        -D "$headers_file" \
+        -o "$body_file"
+    fi
   fi
+
+  request_status=$?
+  sleep "$REQUEST_DELAY_SECONDS"
+  return "$request_status"
 }
 
 http_status() {
@@ -256,10 +278,7 @@ fi
 me_headers="$TMP_DIR/me.headers"
 me_body="$TMP_DIR/me.json"
 if [ -n "$TOKEN" ]; then
-  if curl -sS "$BASE_URL/users/me" \
-    -H "Authorization: Bearer $TOKEN" \
-    -D "$me_headers" \
-    -o "$me_body"; then
+  if http_request GET "$BASE_URL/users/me" "" "$me_headers" "$me_body" "Authorization: Bearer $TOKEN"; then
     me_status=$(http_status "$me_headers")
     if [ "$me_status" = "200" ] && json_has_key "$me_body" "email"; then
       pass "authenticated /users/me returns the user profile"
@@ -277,10 +296,7 @@ section "P3 Product Proxy"
 products_headers="$TMP_DIR/products.headers"
 products_body="$TMP_DIR/products.json"
 if [ -n "$TOKEN" ]; then
-  if curl -sS "$BASE_URL/rentals/products" \
-    -H "Authorization: Bearer $TOKEN" \
-    -D "$products_headers" \
-    -o "$products_body"; then
+  if http_request GET "$BASE_URL/rentals/products" "" "$products_headers" "$products_body" "Authorization: Bearer $TOKEN"; then
     products_status=$(http_status "$products_headers")
     if [ "$products_status" = "200" ]; then
       if json_has_key "$products_body" "data"; then
@@ -301,10 +317,7 @@ fi
 filtered_headers="$TMP_DIR/products-filtered.headers"
 filtered_body="$TMP_DIR/products-filtered.json"
 if [ -n "$TOKEN" ]; then
-  if curl -sS "$BASE_URL/rentals/products?category=TOOLS&page=1&limit=2&owner_id=1" \
-    -H "Authorization: Bearer $TOKEN" \
-    -D "$filtered_headers" \
-    -o "$filtered_body"; then
+  if http_request GET "$BASE_URL/rentals/products?category=TOOLS&page=1&limit=2&owner_id=1" "" "$filtered_headers" "$filtered_body" "Authorization: Bearer $TOKEN"; then
     filtered_status=$(http_status "$filtered_headers")
     if [ "$filtered_status" = "200" ]; then
       pass "/rentals/products forwards query parameters without crashing"
@@ -321,10 +334,7 @@ fi
 product_headers="$TMP_DIR/product.headers"
 product_body="$TMP_DIR/product.json"
 if [ -n "$TOKEN" ]; then
-  if curl -sS "$BASE_URL/rentals/products/1" \
-    -H "Authorization: Bearer $TOKEN" \
-    -D "$product_headers" \
-    -o "$product_body"; then
+  if http_request GET "$BASE_URL/rentals/products/1" "" "$product_headers" "$product_body" "Authorization: Bearer $TOKEN"; then
     product_status=$(http_status "$product_headers")
     if [ "$product_status" = "200" ]; then
       pass "/rentals/products/:id returns HTTP 200 for a sample product"
@@ -341,10 +351,7 @@ fi
 missing_headers="$TMP_DIR/product-missing.headers"
 missing_body="$TMP_DIR/product-missing.json"
 if [ -n "$TOKEN" ]; then
-  if curl -sS "$BASE_URL/rentals/products/999999999" \
-    -H "Authorization: Bearer $TOKEN" \
-    -D "$missing_headers" \
-    -o "$missing_body"; then
+  if http_request GET "$BASE_URL/rentals/products/999999999" "" "$missing_headers" "$missing_body" "Authorization: Bearer $TOKEN"; then
     missing_status=$(http_status "$missing_headers")
     if [ "$missing_status" = "404" ] || [ "$missing_status" = "429" ] || [ "$missing_status" = "502" ]; then
       warn "/rentals/products missing-product probe returned HTTP $missing_status; inspect whether error mapping matches README expectations"
