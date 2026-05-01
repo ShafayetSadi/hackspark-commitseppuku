@@ -1,12 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { getGatewayUrl, readErrorDetail } from "@/lib/auth-service";
+import {
+  AUTH_TOKEN_COOKIE,
+  getGatewayUrl,
+  readErrorDetail,
+} from "@/lib/auth-service";
 
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
-  const date = params.get("date") ?? new Date().toISOString().slice(0, 10);
-  const limit = params.get("limit") ?? "6";
-  const query = new URLSearchParams({ date, limit });
+  const limit = params.get("limit") ?? "5";
+  const category = params.get("category") ?? "";
+  const query = new URLSearchParams({ limit });
+  if (category) query.set("category", category);
+  const token = request.cookies.get(AUTH_TOKEN_COOKIE)?.value;
+  const headers: HeadersInit = token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
 
   try {
     const upstream = await fetch(
@@ -14,6 +23,7 @@ export async function GET(request: NextRequest) {
       {
         method: "GET",
         cache: "no-store",
+        headers,
       },
     );
     if (!upstream.ok) {

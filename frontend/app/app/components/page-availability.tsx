@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
+  CATEGORIES,
+  type Category,
   type CategoryFilter,
   type PageId,
-  TRENDING,
 } from "../data";
 
 import { Badge, Icon, PageHeader, Placeholder } from "./primitives";
@@ -537,11 +538,61 @@ type TrendingProps = {
 };
 
 export function Trending({ setPage, setFilterCategory }: TrendingProps) {
-  const [refreshing, setRefreshing] = useState(false);
-  const refresh = () => {
-    setRefreshing(true);
-    setTimeout(() => setRefreshing(false), 800);
+  const toKnownCategory = (value: string): Category => {
+    const matched = CATEGORIES.find(
+      (category) => category.toLowerCase() === value.toLowerCase(),
+    );
+    return matched ?? "Electronics";
   };
+
+  const [recommendations, setRecommendations] = useState<
+    Array<{ productId: number; name: string; score: number; category: string }>
+  >([]);
+  const [refreshing, setRefreshing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const refresh = async () => {
+    setRefreshing(true);
+    setErrorMessage(null);
+    try {
+      const response = await fetch("/api/analytics/recommendations?limit=6", {
+        cache: "no-store",
+      });
+      if (!response.ok) {
+        setErrorMessage("Recommendations are unavailable right now.");
+        return;
+      }
+      const payload = (await response.json()) as {
+        category?: string;
+        recommendations?: Array<{
+          productId?: number;
+          id?: number;
+          name?: string;
+          title?: string;
+          score?: number;
+          recommendationScore?: number;
+          category?: string;
+        }>;
+      };
+      const fallbackCategory = String(payload.category ?? "GENERAL");
+      setRecommendations(
+        (payload.recommendations ?? []).map((item) => ({
+          productId: Number(item.productId ?? item.id ?? 0),
+          name: String(item.name ?? item.title ?? "Recommended product"),
+          score: Number(item.score ?? item.recommendationScore ?? 0),
+          category: String(item.category ?? fallbackCategory),
+        })),
+      );
+    } catch {
+      setErrorMessage("Recommendations are unavailable right now.");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  useEffect(() => {
+    void refresh();
+  }, []);
 
   return (
     <div className="content">
@@ -552,7 +603,7 @@ export function Trending({ setPage, setFilterCategory }: TrendingProps) {
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            onClick={refresh}
+            onClick={() => void refresh()}
             disabled={refreshing}
           >
             <span
@@ -611,6 +662,7 @@ export function Trending({ setPage, setFilterCategory }: TrendingProps) {
       </div>
 
       <h2 className="section-title">Top picks for today</h2>
+      {errorMessage ? <div className="result-warn" style={{ marginBottom: 12 }}>{errorMessage}</div> : null}
       <div
         style={{
           display: "grid",
@@ -641,10 +693,10 @@ export function Trending({ setPage, setFilterCategory }: TrendingProps) {
                 </div>
               </div>
             ))
-          : TRENDING.map((t, i) => (
-              <div key={t.id} className="product-card">
+          : recommendations.map((t, i) => (
+              <div key={`${t.productId}-${i}`} className="product-card">
                 <Placeholder
-                  category={t.category}
+                  category={toKnownCategory(t.category)}
                   label={`#${i + 1} trending`}
                 />
                 <div className="product-body">
@@ -657,11 +709,11 @@ export function Trending({ setPage, setFilterCategory }: TrendingProps) {
                     }}
                   >
                     <Badge variant="default">{t.category}</Badge>
-                    <Badge variant="accent">Score {t.score}</Badge>
+                    <Badge variant="accent">Score {t.score.toFixed(2)}</Badge>
                   </div>
                   <div className="product-title">{t.name}</div>
                   <div style={{ fontSize: 12, color: "var(--text-3)" }}>
-                    {t.note}
+                    Product #{t.productId} recommended from analytics.
                   </div>
                   <div className="product-meta">
                     <div
@@ -689,7 +741,7 @@ export function Trending({ setPage, setFilterCategory }: TrendingProps) {
                       type="button"
                       className="btn btn-secondary btn-sm"
                       onClick={() => {
-                        setFilterCategory(t.category);
+                        setFilterCategory(toKnownCategory(t.category));
                         setPage("products");
                       }}
                     >
