@@ -28,7 +28,12 @@ function AssistantAvatar() {
   );
 }
 
-export function Chat() {
+type ChatProps = {
+  autoSendPrompt?: string | null;
+  onAutoSendConsumed?: () => void;
+};
+
+export function Chat({ autoSendPrompt = null, onAutoSendConsumed }: ChatProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -78,6 +83,13 @@ export function Chat() {
       node.parentElement.scrollTop = node.parentElement.scrollHeight;
     }
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!autoSendPrompt || autoSendPrompt.trim().length === 0) return;
+    if (loading) return;
+    void send(autoSendPrompt);
+    onAutoSendConsumed?.();
+  }, [autoSendPrompt, loading]);
 
   const send = async (text?: string) => {
     const content = (text ?? input).trim();

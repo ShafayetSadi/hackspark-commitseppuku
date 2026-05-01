@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   CATEGORIES,
@@ -78,7 +78,19 @@ type AvailabilityPayload = {
   available: boolean;
 };
 
-export function Availability() {
+type AvailabilityProps = {
+  setPage: (page: PageId) => void;
+  setChatAutoPrompt: (value: string | null) => void;
+  prefillProductId?: number | null;
+  onPrefillConsumed?: () => void;
+};
+
+export function Availability({
+  setPage,
+  setChatAutoPrompt,
+  prefillProductId = null,
+  onPrefillConsumed,
+}: AvailabilityProps) {
   const [productId, setProductId] = useState("1042");
   const [from, setFrom] = useState("2026-05-08");
   const [to, setTo] = useState("2026-05-15");
@@ -86,12 +98,15 @@ export function Availability() {
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const check = async () => {
+  const check = useCallback(async (overrideProductId?: number) => {
     setLoading(true);
     setErrorMessage(null);
     setResult(null);
     try {
-      const id = Number.parseInt(productId, 10);
+      const id =
+        typeof overrideProductId === "number"
+          ? overrideProductId
+          : Number.parseInt(productId, 10);
       if (!Number.isFinite(id) || id <= 0) {
         setErrorMessage("Please enter a valid product ID.");
         return;
@@ -141,7 +156,14 @@ export function Availability() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [from, productId, to]);
+
+  useEffect(() => {
+    if (!prefillProductId || prefillProductId <= 0) return;
+    setProductId(String(prefillProductId));
+    void check(prefillProductId);
+    onPrefillConsumed?.();
+  }, [check, onPrefillConsumed, prefillProductId]);
 
   return (
     <div className="content">
@@ -517,10 +539,34 @@ export function Availability() {
               ) : null}
 
               <div style={{ marginTop: 20, display: "flex", gap: 8 }}>
-                <button type="button" className="btn btn-secondary btn-sm">
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm"
+                  onClick={() => setPage("products")}
+                >
                   Continue browsing
                 </button>
-                <button type="button" className="btn btn-ghost btn-sm">
+                <button
+                  type="button"
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => {
+                    const prompt = `Check product #${result.productId} availability from ${result.from} to ${result.to}. Busy periods: ${
+                      result.busyPeriods.length > 0
+                        ? result.busyPeriods
+                            .map((p) => `${p.start} to ${p.end}`)
+                            .join(", ")
+                        : "none"
+                    }. Free windows: ${
+                      result.freeWindows.length > 0
+                        ? result.freeWindows
+                            .map((w) => `${w.start} to ${w.end}`)
+                            .join(", ")
+                        : "none"
+                    }.`;
+                    setChatAutoPrompt(prompt);
+                    setPage("chat");
+                  }}
+                >
                   <Icon name="sparkle" size={12} /> Ask assistant about this
                 </button>
               </div>
@@ -535,9 +581,10 @@ export function Availability() {
 type TrendingProps = {
   setPage: (page: PageId) => void;
   setFilterCategory: (value: CategoryFilter) => void;
+  userId: number;
 };
 
-export function Trending({ setPage, setFilterCategory }: TrendingProps) {
+export function Trending({ setPage, setFilterCategory, userId }: TrendingProps) {
   const toKnownCategory = (value: string): Category => {
     const matched = CATEGORIES.find(
       (category) => category.toLowerCase() === value.toLowerCase(),
@@ -548,8 +595,12 @@ export function Trending({ setPage, setFilterCategory }: TrendingProps) {
   const [recommendations, setRecommendations] = useState<
     Array<{ productId: number; name: string; score: number; category: string }>
   >([]);
+  const [topCategories, setTopCategories] = useState<
+    Array<{ category: string; rentalCount: number }>
+  >([]);
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [topCategoriesError, setTopCategoriesError] = useState<string | null>(null);
 
   const refresh = async () => {
     setRefreshing(true);
@@ -593,6 +644,33 @@ export function Trending({ setPage, setFilterCategory }: TrendingProps) {
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    const loadTopCategories = async () => {
+      try {
+        setTopCategoriesError(null);
+        const response = await fetch(`/api/rentals/users/${userId}/top-categories?k=5`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          setTopCategoriesError("Top categories are unavailable right now.");
+          return;
+        }
+        const payload = (await response.json()) as {
+          topCategories?: Array<{ category?: string; rentalCount?: number }>;
+        };
+        setTopCategories(
+          (payload.topCategories ?? []).map((item) => ({
+            category: String(item.category ?? "UNKNOWN"),
+            rentalCount: Number(item.rentalCount ?? 0),
+          })),
+        );
+      } catch {
+        setTopCategoriesError("Top categories are unavailable right now.");
+      }
+    };
+    void loadTopCategories();
+  }, [userId]);
 
   return (
     <div className="content">
@@ -663,6 +741,41 @@ export function Trending({ setPage, setFilterCategory }: TrendingProps) {
 
       <h2 className="section-title">Top picks for today</h2>
       {errorMessage ? <div className="result-warn" style={{ marginBottom: 12 }}>{errorMessage}</div> : null}
+      <h2 className="section-title">Your top rental categories</h2>
+      {topCategoriesError ? (
+        <div className="result-warn" style={{ marginBottom: 12 }}>{topCategoriesError}</div>
+      ) : null}
+      {topCategories.length > 0 ? (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))",
+            gap: 8,
+            marginBottom: 14,
+          }}
+        >
+          {topCategories.map((item) => (
+            <button
+              key={item.category}
+              type="button"
+              className="card card-hover"
+              style={{ padding: 12, textAlign: "left", cursor: "pointer" }}
+              onClick={() => {
+                setFilterCategory(toKnownCategory(item.category));
+                setPage("products");
+              }}
+            >
+              <div className="mono" style={{ fontSize: 10.5, color: "var(--text-3)" }}>
+                {item.category}
+              </div>
+              <div style={{ fontSize: 14, fontWeight: 600, marginTop: 4 }}>
+                {item.rentalCount}
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : null}
+
       <div
         style={{
           display: "grid",

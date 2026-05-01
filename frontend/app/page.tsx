@@ -645,8 +645,9 @@ function CategoriesSection() {
         </p>
         <div className="lp-cats-grid">
           {categories.map((c) => (
-            <div
+            <Link
               key={c.name}
+              href={APP_HREF}
               className={`lp-cat${c.cta ? " lp-cat-cta" : ""}`}
             >
               {c.imageSrc ? (
@@ -660,7 +661,7 @@ function CategoriesSection() {
                 <div className="lp-cat-name">{c.name}</div>
                 <div className="lp-cat-count">{c.count}</div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>
@@ -857,13 +858,6 @@ function Footer() {
           <Link href="/careers">Careers</Link>
           <Link href="/press">Press</Link>
           <Link href="/contact">Contact</Link>
-        </div>
-        <div className="lp-foot-col">
-          <h4>Resources</h4>
-          <a href="#">Help center</a>
-          <a href="#">Trust & safety</a>
-          <a href="#">Owner guide</a>
-          <a href="#">API (soon)</a>
         </div>
       </div>
       <div className="lp-foot-bottom">

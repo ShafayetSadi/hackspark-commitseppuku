@@ -50,6 +50,9 @@ export default function AppShell({ initialUser }: AppShellProps) {
   const [page, setPage] = useState<PageId>("dashboard");
   const [filterCategory, setFilterCategory] =
     useState<CategoryFilter>("All");
+  const [chatAutoPrompt, setChatAutoPrompt] = useState<string | null>(null);
+  const [availabilityPrefillProductId, setAvailabilityPrefillProductId] =
+    useState<number | null>(null);
 
   useEffect(() => {
     try {
@@ -83,19 +86,35 @@ export default function AppShell({ initialUser }: AppShellProps) {
           <Products
             filterCategory={filterCategory}
             setFilterCategory={setFilterCategory}
+            setPage={setPage}
+            setChatAutoPrompt={setChatAutoPrompt}
+            setAvailabilityPrefillProductId={setAvailabilityPrefillProductId}
           />
         );
       case "availability":
-        return <Availability />;
+        return (
+          <Availability
+            setPage={setPage}
+            setChatAutoPrompt={setChatAutoPrompt}
+            prefillProductId={availabilityPrefillProductId}
+            onPrefillConsumed={() => setAvailabilityPrefillProductId(null)}
+          />
+        );
       case "trending":
         return (
           <Trending
             setPage={setPage}
             setFilterCategory={setFilterCategory}
+            userId={initialUser.id}
           />
         );
       case "chat":
-        return <Chat />;
+        return (
+          <Chat
+            autoSendPrompt={chatAutoPrompt}
+            onAutoSendConsumed={() => setChatAutoPrompt(null)}
+          />
+        );
       case "profile":
         return <Profile user={initialUser} />;
       case "analytics":
@@ -116,7 +135,10 @@ export default function AppShell({ initialUser }: AppShellProps) {
           userEmail={userEmail}
         />
         <div className="main">
-          <Topbar userInitials={userInitials} />
+          <Topbar
+            userInitials={userInitials}
+            onOpenProfile={() => setPage("profile")}
+          />
           {renderPage()}
         </div>
       </div>
