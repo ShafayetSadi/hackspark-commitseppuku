@@ -2,8 +2,6 @@
 # Integration tests requiring Central API token are skipped here.
 # This file is a placeholder to keep the test suite consistent.
 
-import pytest
-
 
 def test_placeholder():
     """Rental service fetches all data from Central API — no local storage to test."""

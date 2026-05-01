@@ -1,119 +1,9 @@
 import json
 
 import pytest
-from conftest import AsyncSessionAdapter
 from fastapi import Request
-from fastapi.encoders import jsonable_encoder
-from fastapi.responses import JSONResponse
 
-
-@pytest.mark.anyio
-@pytest.mark.integration
-async def test_end_to_end_flow(
-    gateway_runtime,
-    auth_runtime,
-    item_runtime,
-    ai_runtime,
-    monkeypatch,
-):
-    gateway_settings = gateway_runtime.core_config.get_settings()
-    auth_settings = auth_runtime.core_config.get_settings()
-    ai_settings = ai_runtime.core_config.get_settings()
-
-    async def fake_forward_request(
-        request: Request,
-        upstream_base: str,
-        subpath: str = "",
-        **kwargs,
-    ):
-        body = await request.body()
-        payload = json.loads(body.decode()) if body else {}
-
-        if upstream_base == gateway_settings.auth_service_url:
-            with auth_runtime.session_factory() as sync_session:
-                session = AsyncSessionAdapter(sync_session)
-                if request.method == "POST" and subpath == "register":
-                    response = await auth_runtime.api_routes.register(
-                        auth_runtime.schemas.RegisterRequest(**payload),
-                        session=session,
-                        settings=auth_settings,
-                    )
-                    return JSONResponse(status_code=201, content=jsonable_encoder(response))
-                if request.method == "GET" and subpath == "me":
-                    downstream_request = build_request("/me", headers=dict(request.headers))
-                    downstream_request.state.user_id = request.state.user_id
-                    current_user = await auth_runtime.api_dependencies.get_current_user(
-                        downstream_request,
-                        session=session,
-                    )
-                    response = await auth_runtime.api_routes.me(current_user)
-                    return JSONResponse(status_code=200, content=jsonable_encoder(response))
-
-        if upstream_base == gateway_settings.item_service_url:
-            with item_runtime.session_factory() as sync_session:
-                session = AsyncSessionAdapter(sync_session)
-                if request.method == "POST" and subpath == "items":
-                    response = await item_runtime.api_routes.post_item(
-                        item_runtime.schemas.ItemCreateRequest(**payload),
-                        session=session,
-                    )
-                    return JSONResponse(status_code=201, content=jsonable_encoder(response))
-
-        if upstream_base == gateway_settings.ai_agent_service_url:
-            if request.method == "POST" and subpath == "chat":
-                response = await ai_runtime.api_routes.chat(
-                    ai_runtime.schemas.ChatRequest(**payload),
-                    settings=ai_settings,
-                )
-                return JSONResponse(status_code=200, content=jsonable_encoder(response))
-
-        raise AssertionError(f"Unexpected proxy call: {request.method} {upstream_base}/{subpath}")
-
-    monkeypatch.setattr(gateway_runtime.api_routes, "forward_request", fake_forward_request)
-
-    register_request = build_request(
-        "/auth/register",
-        method="POST",
-        body={"email": "team@example.com", "password": "password123", "name": "Hack Team"},
-    )
-    register_response = await gateway_runtime.api_routes.auth_proxy(
-        "register",
-        register_request,
-        settings=gateway_settings,
-    )
-    token = json.loads(register_response.body.decode())["access_token"]
-
-    me_response = await gateway_runtime.main.jwt_validation_middleware(
-        build_request("/auth/me", headers={"Authorization": f"Bearer {token}"}),
-        lambda req: gateway_runtime.api_routes.auth_proxy("me", req, settings=gateway_settings),
-    )
-    assert me_response.status_code == 200
-
-    item_response = await gateway_runtime.main.jwt_validation_middleware(
-        build_request(
-            "/items",
-            method="POST",
-            headers={"Authorization": f"Bearer {token}"},
-            body={"name": "Camera", "category": "rental", "quantity": 3},
-        ),
-        lambda req: gateway_runtime.api_routes.items_root_proxy(req, settings=gateway_settings),
-    )
-    assert item_response.status_code == 201
-
-    ai_response = await gateway_runtime.main.jwt_validation_middleware(
-        build_request(
-            "/ai/chat",
-            method="POST",
-            headers={"Authorization": f"Bearer {token}"},
-            body={"query": "How does JWT auth protect inventory endpoints?", "top_k": 2},
-        ),
-        lambda req: gateway_runtime.api_routes.ai_chat_proxy(req, settings=gateway_settings),
-    )
-    assert ai_response.status_code == 200
-    assert json.loads(ai_response.body.decode())["sources"] == [
-        "security/auth.md",
-        "catalog/items.md",
-    ]
+from shared.app_core.security import create_access_token
 
 
 def build_request(
@@ -139,3 +29,87 @@ def build_request(
         ],
     }
     return Request(scope, receive=receive)
+
+
+@pytest.mark.asyncio
+@pytest.mark.integration
+async def test_end_to_end_gateway_flow(gateway_runtime, monkeypatch):
+    settings = gateway_runtime.core_config.get_settings()
+
+    class UserStub:
+        async def Register(self, request):
+            assert request.email == "team@example.com"
+            token = create_access_token(
+                subject="42",
+                secret=settings.jwt_secret,
+                algorithm=settings.jwt_algorithm,
+                expires_minutes=settings.access_token_expire_minutes,
+            )
+            return gateway_runtime.api_routes.USER_PB2.AuthResponse(
+                access_token=token,
+                token_type="bearer",
+            )
+
+        async def Me(self, request):
+            assert request.user_id == "42"
+            return gateway_runtime.api_routes.USER_PB2.UserResponse(
+                id=42,
+                email="team@example.com",
+                full_name="Hack Team",
+            )
+
+    class AgenticStub:
+        async def Chat(self, request):
+            assert request.session_id == ""
+            return gateway_runtime.api_routes.AGENTIC_PB2.ChatResponse(
+                answer="JWT auth protects inventory endpoints by requiring a bearer token.",
+                sources=["security/auth.md", "catalog/items.md"],
+                confidence=0.92,
+                session_id="session-1",
+            )
+
+    monkeypatch.setattr(
+        gateway_runtime.api_routes.user_client, "get_stub", lambda _addr: UserStub()
+    )
+    monkeypatch.setattr(
+        gateway_runtime.api_routes.agentic_client, "get_stub", lambda _addr: AgenticStub()
+    )
+
+    register_response = await gateway_runtime.api_routes.register(
+        gateway_runtime.api_routes.RegisterBody(
+            email="team@example.com",
+            password="password123",
+            name="Hack Team",
+        ),
+        settings=settings,
+    )
+    token = register_response["access_token"]
+
+    me_response = await gateway_runtime.main.jwt_validation_middleware(
+        build_request("/users/me", headers={"Authorization": f"Bearer {token}"}),
+        lambda req: gateway_runtime.api_routes.me(req, settings=settings),
+    )
+    assert me_response == {
+        "id": 42,
+        "email": "team@example.com",
+        "name": "Hack Team",
+    }
+
+    chat_response = await gateway_runtime.main.jwt_validation_middleware(
+        build_request(
+            "/chat",
+            method="POST",
+            headers={"Authorization": f"Bearer {token}"},
+            body={"query": "How does JWT auth protect inventory endpoints?", "top_k": 2},
+        ),
+        lambda req: gateway_runtime.api_routes.chat(
+            gateway_runtime.api_routes.ChatBody(
+                query="How does JWT auth protect inventory endpoints?",
+                top_k=2,
+                session_id="",
+            ),
+            settings=settings,
+        ),
+    )
+    assert chat_response["sources"] == ["security/auth.md", "catalog/items.md"]
+    assert chat_response["session_id"] == "session-1"

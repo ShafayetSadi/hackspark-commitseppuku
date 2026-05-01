@@ -4,10 +4,13 @@ from auth_service.db.session import get_db_session
 from auth_service.models.user import User
 from auth_service.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from auth_service.services.auth_service import login_user, register_user
+from auth_service.services.discount import get_user_discount
 from auth_service.services.errors import DuplicateEmailError, InvalidCredentialsError
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status as http_status
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from shared.app_core.central_api import CentralAPIClient
 
 router = APIRouter()
 
@@ -51,3 +54,12 @@ async def login(
 @router.get("/me", response_model=UserResponse)
 async def me(current_user: User = Depends(get_current_user)) -> UserResponse:
     return UserResponse.from_model(current_user)
+
+
+@router.get("/users/{user_id}/discount")
+async def discount(
+    user_id: int,
+    settings: AuthSettings = Depends(get_settings),
+):
+    client = CentralAPIClient(settings.central_api_url, settings.central_api_token)
+    return await get_user_discount(client, user_id=user_id)

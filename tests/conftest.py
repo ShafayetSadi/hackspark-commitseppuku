@@ -138,6 +138,7 @@ def auth_runtime(auth_env):
             "api_routes": "auth_service.api.routes",
             "core_config": "auth_service.core.config",
             "schemas": "auth_service.schemas.auth",
+            "discount_service": "auth_service.services.discount",
         },
     )
     runtime.session_factory = build_sync_session_factory(auth_env["SQLITE_PATH"])
@@ -166,6 +167,7 @@ def gateway_env() -> dict[str, str]:
     return {
         "APP_ENV": "dev",
         "JWT_SECRET": "test-secret",
+        "METRICS_TOKEN": "",
         "USER_SERVICE_ADDR": "localhost:50051",
         "RENTAL_SERVICE_ADDR": "localhost:50052",
         "ANALYTICS_SERVICE_ADDR": "localhost:50053",
@@ -182,5 +184,28 @@ def gateway_runtime(gateway_env):
             "main": "gateway.main",
             "core_config": "gateway.core.config",
             "api_routes": "gateway.api.routes",
+        },
+    )
+
+
+@pytest.fixture
+def rental_env() -> dict[str, str]:
+    return {
+        "APP_ENV": "dev",
+        "JWT_SECRET": "test-secret",
+        "CENTRAL_API_TOKEN": "test-token",
+    }
+
+
+@pytest.fixture
+def rental_runtime(rental_env):
+    return load_runtime(
+        ROOT / "rental-service",
+        rental_env,
+        {
+            "api_routes": "rental_service.api.routes",
+            "core_config": "rental_service.core.config",
+            "rental_logic": "rental_service.services.rentals",
+            "intervals": "rental_service.utils.intervals",
         },
     )

@@ -1,5 +1,7 @@
 """Mapping between gRPC status codes and HTTP status codes for the gateway."""
 
+import json
+
 import grpc
 from fastapi import HTTPException
 
@@ -19,6 +21,10 @@ _GRPC_TO_HTTP: dict[grpc.StatusCode, int] = {
 
 def grpc_to_http_exception(exc: grpc.RpcError) -> HTTPException:
     code: grpc.StatusCode = exc.code()  # type: ignore[union-attr]
-    detail: str = exc.details() or str(code)  # type: ignore[union-attr]
+    raw_detail: str = exc.details() or str(code)  # type: ignore[union-attr]
     http_status = _GRPC_TO_HTTP.get(code, 500)
+    try:
+        detail = json.loads(raw_detail)
+    except json.JSONDecodeError:
+        detail = raw_detail
     return HTTPException(status_code=http_status, detail=detail)

@@ -6,7 +6,7 @@ FRONTEND_DIR ?= frontend
 NPM ?= npm
 ALEMBIC_USER := alembic -c /app/user-service/alembic.ini
 
-.PHONY: up down down-v logs build ps migrate migrate-user revision-user alembic-check downgrade sync lock format lint typecheck test check proto verify-chapter1 frontend-install frontend-dev frontend-lint frontend-build frontend-check
+.PHONY: up down down-v logs build ps migrate migrate-user revision-user alembic-check downgrade sync lock format lint typecheck test check proto verify-chapter1 verify-chapter2 frontend-install frontend-dev frontend-lint frontend-build frontend-check
 
 up:
 	$(COMPOSE) up
@@ -58,6 +58,9 @@ import re, pathlib; \
 verify-chapter1:
 	sh scripts/verify-chapter1.sh
 
+verify-chapter2:
+	sh scripts/verify-chapter2.sh
+
 sync:
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv sync
 
@@ -74,6 +77,7 @@ typecheck:
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run ty check shared
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run --directory api-gateway ty check gateway
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run --directory user-service ty check auth_service
+	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run --directory rental-service ty check rental_service
 	UV_CACHE_DIR=$(UV_CACHE_DIR) uv run --directory agentic-service ty check ai_agent_service
 
 test:

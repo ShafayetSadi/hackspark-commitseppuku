@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0crental.proto\x12\x06rental\">\n\rProductsQuery\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x0c\n\x04page\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\t\"\'\n\x11GetProductRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\"%\n\x10ProductsResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t\"$\n\x0fProductResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t2\x92\x01\n\rRentalService\x12?\n\x0cListProducts\x12\x15.rental.ProductsQuery\x1a\x18.rental.ProductsResponse\x12@\n\nGetProduct\x12\x19.rental.GetProductRequest\x1a\x17.rental.ProductResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0crental.proto\x12\x06rental\">\n\rProductsQuery\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x0c\n\x04page\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\t\"\'\n\x11GetProductRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\"%\n\x10ProductsResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t\"$\n\x0fProductResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t\"M\n\x13\x41vailabilityRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x11\n\tfrom_date\x18\x02 \x01(\t\x12\x0f\n\x07to_date\x18\x03 \x01(\t\"\'\n\tDateRange\x12\r\n\x05start\x18\x01 \x01(\t\x12\x0b\n\x03\x65nd\x18\x02 \x01(\t\"\xb3\x01\n\x14\x41vailabilityResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x11\n\tfrom_date\x18\x02 \x01(\t\x12\x0f\n\x07to_date\x18\x03 \x01(\t\x12\x11\n\tavailable\x18\x04 \x01(\x08\x12\'\n\x0c\x62usy_periods\x18\x05 \x03(\x0b\x32\x11.rental.DateRange\x12\'\n\x0c\x66ree_windows\x18\x06 \x03(\x0b\x32\x11.rental.DateRange\"H\n\x15KthBusiestDateRequest\x12\x12\n\nfrom_month\x18\x01 \x01(\t\x12\x10\n\x08to_month\x18\x02 \x01(\t\x12\t\n\x01k\x18\x03 \x01(\x05\"m\n\x16KthBusiestDateResponse\x12\x12\n\nfrom_month\x18\x01 \x01(\t\x12\x10\n\x08to_month\x18\x02 \x01(\t\x12\t\n\x01k\x18\x03 \x01(\x05\x12\x0c\n\x04\x64\x61te\x18\x04 \x01(\t\x12\x14\n\x0crental_count\x18\x05 \x01(\x05\"6\n\x18UserTopCategoriesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12\t\n\x01k\x18\x02 \x01(\x05\"7\n\rCategoryCount\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x14\n\x0crental_count\x18\x02 \x01(\x05\"[\n\x19UserTopCategoriesResponse\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12-\n\x0etop_categories\x18\x02 \x03(\x0b\x32\x15.rental.CategoryCount\"<\n\x18LongestFreeStreakRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x0c\n\x04year\x18\x02 \x01(\x05\">\n\nFreeStreak\x12\x11\n\tfrom_date\x18\x01 \x01(\t\x12\x0f\n\x07to_date\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x61ys\x18\x03 \x01(\x05\"n\n\x19LongestFreeStreakResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x0c\n\x04year\x18\x02 \x01(\x05\x12/\n\x13longest_free_streak\x18\x03 \x01(\x0b\x32\x12.rental.FreeStreak2\xee\x03\n\rRentalService\x12?\n\x0cListProducts\x12\x15.rental.ProductsQuery\x1a\x18.rental.ProductsResponse\x12@\n\nGetProduct\x12\x19.rental.GetProductRequest\x1a\x17.rental.ProductResponse\x12L\n\x0fGetAvailability\x12\x1b.rental.AvailabilityRequest\x1a\x1c.rental.AvailabilityResponse\x12R\n\x11GetKthBusiestDate\x12\x1d.rental.KthBusiestDateRequest\x1a\x1e.rental.KthBusiestDateResponse\x12[\n\x14GetUserTopCategories\x12 .rental.UserTopCategoriesRequest\x1a!.rental.UserTopCategoriesResponse\x12[\n\x14GetLongestFreeStreak\x12 .rental.LongestFreeStreakRequest\x1a!.rental.LongestFreeStreakResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -39,6 +39,28 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_PRODUCTSRESPONSE']._serialized_end=166
   _globals['_PRODUCTRESPONSE']._serialized_start=168
   _globals['_PRODUCTRESPONSE']._serialized_end=204
-  _globals['_RENTALSERVICE']._serialized_start=207
-  _globals['_RENTALSERVICE']._serialized_end=353
+  _globals['_AVAILABILITYREQUEST']._serialized_start=206
+  _globals['_AVAILABILITYREQUEST']._serialized_end=283
+  _globals['_DATERANGE']._serialized_start=285
+  _globals['_DATERANGE']._serialized_end=324
+  _globals['_AVAILABILITYRESPONSE']._serialized_start=327
+  _globals['_AVAILABILITYRESPONSE']._serialized_end=506
+  _globals['_KTHBUSIESTDATEREQUEST']._serialized_start=508
+  _globals['_KTHBUSIESTDATEREQUEST']._serialized_end=580
+  _globals['_KTHBUSIESTDATERESPONSE']._serialized_start=582
+  _globals['_KTHBUSIESTDATERESPONSE']._serialized_end=691
+  _globals['_USERTOPCATEGORIESREQUEST']._serialized_start=693
+  _globals['_USERTOPCATEGORIESREQUEST']._serialized_end=747
+  _globals['_CATEGORYCOUNT']._serialized_start=749
+  _globals['_CATEGORYCOUNT']._serialized_end=804
+  _globals['_USERTOPCATEGORIESRESPONSE']._serialized_start=806
+  _globals['_USERTOPCATEGORIESRESPONSE']._serialized_end=897
+  _globals['_LONGESTFREESTREAKREQUEST']._serialized_start=899
+  _globals['_LONGESTFREESTREAKREQUEST']._serialized_end=959
+  _globals['_FREESTREAK']._serialized_start=961
+  _globals['_FREESTREAK']._serialized_end=1023
+  _globals['_LONGESTFREESTREAKRESPONSE']._serialized_start=1025
+  _globals['_LONGESTFREESTREAKRESPONSE']._serialized_end=1135
+  _globals['_RENTALSERVICE']._serialized_start=1138
+  _globals['_RENTALSERVICE']._serialized_end=1632
 # @@protoc_insertion_point(module_scope)

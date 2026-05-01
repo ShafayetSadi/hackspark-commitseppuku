@@ -96,10 +96,10 @@ class CentralAPIClient:
         try:
             async with httpx.AsyncClient(timeout=self._timeout) as client:
                 resp = await client.get(url, params=params or {}, headers=self._headers())
-        except httpx.TimeoutException:
-            raise HTTPException(status_code=504, detail="Central API timeout")
-        except httpx.RequestError:
-            raise HTTPException(status_code=502, detail="Central API unreachable")
+        except httpx.TimeoutException as exc:
+            raise HTTPException(status_code=504, detail="Central API timeout") from exc
+        except httpx.RequestError as exc:
+            raise HTTPException(status_code=502, detail="Central API unreachable") from exc
 
         if resp.status_code == 200:
             return resp.json()

@@ -6,6 +6,7 @@ service UserService {
   rpc Register(RegisterRequest) returns (AuthResponse);
   rpc Login(LoginRequest) returns (AuthResponse);
   rpc Me(MeRequest) returns (UserResponse);
+  rpc GetDiscount(DiscountRequest) returns (DiscountResponse);
 }
 
 message RegisterRequest {
@@ -32,4 +33,14 @@ message UserResponse {
   int32 id = 1;
   string email = 2;
   string full_name = 3;
+}
+
+message DiscountRequest {
+  int32 user_id = 1;
+}
+
+message DiscountResponse {
+  int32 user_id = 1;
+  int32 security_score = 2;
+  int32 discount_percent = 3;
 }

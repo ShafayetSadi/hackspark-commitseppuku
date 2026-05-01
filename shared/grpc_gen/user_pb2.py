@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nuser.proto\x12\x04user\"E\n\x0fRegisterRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\x12\x11\n\tfull_name\x18\x03 \x01(\t\"/\n\x0cLoginRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"\x1c\n\tMeRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"8\n\x0c\x41uthResponse\x12\x14\n\x0c\x61\x63\x63\x65ss_token\x18\x01 \x01(\t\x12\x12\n\ntoken_type\x18\x02 \x01(\t\"<\n\x0cUserResponse\x12\n\n\x02id\x18\x01 \x01(\x05\x12\r\n\x05\x65mail\x18\x02 \x01(\t\x12\x11\n\tfull_name\x18\x03 \x01(\t2\xa0\x01\n\x0bUserService\x12\x35\n\x08Register\x12\x15.user.RegisterRequest\x1a\x12.user.AuthResponse\x12/\n\x05Login\x12\x12.user.LoginRequest\x1a\x12.user.AuthResponse\x12)\n\x02Me\x12\x0f.user.MeRequest\x1a\x12.user.UserResponseb\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\nuser.proto\x12\x04user\"E\n\x0fRegisterRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\x12\x11\n\tfull_name\x18\x03 \x01(\t\"/\n\x0cLoginRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"\x1c\n\tMeRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\"8\n\x0c\x41uthResponse\x12\x14\n\x0c\x61\x63\x63\x65ss_token\x18\x01 \x01(\t\x12\x12\n\ntoken_type\x18\x02 \x01(\t\"<\n\x0cUserResponse\x12\n\n\x02id\x18\x01 \x01(\x05\x12\r\n\x05\x65mail\x18\x02 \x01(\t\x12\x11\n\tfull_name\x18\x03 \x01(\t\"\"\n\x0f\x44iscountRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\"U\n\x10\x44iscountResponse\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12\x16\n\x0esecurity_score\x18\x02 \x01(\x05\x12\x18\n\x10\x64iscount_percent\x18\x03 \x01(\x05\x32\xde\x01\n\x0bUserService\x12\x35\n\x08Register\x12\x15.user.RegisterRequest\x1a\x12.user.AuthResponse\x12/\n\x05Login\x12\x12.user.LoginRequest\x1a\x12.user.AuthResponse\x12)\n\x02Me\x12\x0f.user.MeRequest\x1a\x12.user.UserResponse\x12<\n\x0bGetDiscount\x12\x15.user.DiscountRequest\x1a\x16.user.DiscountResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -41,6 +41,10 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['_AUTHRESPONSE']._serialized_end=226
   _globals['_USERRESPONSE']._serialized_start=228
   _globals['_USERRESPONSE']._serialized_end=288
-  _globals['_USERSERVICE']._serialized_start=291
-  _globals['_USERSERVICE']._serialized_end=451
+  _globals['_DISCOUNTREQUEST']._serialized_start=290
+  _globals['_DISCOUNTREQUEST']._serialized_end=324
+  _globals['_DISCOUNTRESPONSE']._serialized_start=326
+  _globals['_DISCOUNTRESPONSE']._serialized_end=411
+  _globals['_USERSERVICE']._serialized_start=414
+  _globals['_USERSERVICE']._serialized_end=636
 # @@protoc_insertion_point(module_scope)
