@@ -291,12 +291,16 @@ async def merged_feed(request: Request, settings: GatewaySettings = Depends(get_
     limit = _parse_query_int(request.query_params.get("limit", "0"), field_name="limit")
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
+        product_id_parts = [value.strip() for value in product_ids.split(",")]
+        if not product_id_parts or any(part == "" for part in product_id_parts):
+            raise HTTPException(
+                status_code=400,
+                detail="productIds must be 1-10 comma-separated integers",
+            )
         resp = await stub.GetMergedFeed(
             RENTAL_PB2.MergedFeedRequest(
                 product_ids=[
-                    _parse_query_int(value.strip(), field_name="productIds")
-                    for value in product_ids.split(",")
-                    if value.strip()
+                    _parse_query_int(value, field_name="productIds") for value in product_id_parts
                 ],
                 limit=limit,
             )
