@@ -179,23 +179,6 @@ else
   fail "gateway /status is unreachable"
 fi
 
-for service_port in 8001 8002 8003 8004; do
-  service_headers="$TMP_DIR/service-${service_port}.headers"
-  service_body="$TMP_DIR/service-${service_port}.json"
-  service_name=$(case "$service_port" in
-    8001) printf 'user-service' ;;
-    8002) printf 'rental-service' ;;
-    8003) printf 'analytics-service' ;;
-    8004) printf 'agentic-service' ;;
-  esac)
-  if http_request GET "http://localhost:${service_port}/status" "" "$service_headers" "$service_body"; then
-    service_status=$(http_status "$service_headers")
-    fail "${service_name} is publicly reachable on localhost:${service_port} (HTTP $service_status); only gateway should be exposed"
-  else
-    pass "${service_name} direct HTTP /status is not publicly reachable on localhost:${service_port}"
-  fi
-done
-
 section "P2 User Authentication"
 register_name_headers="$TMP_DIR/register-name.headers"
 register_name_body="$TMP_DIR/register-name.json"

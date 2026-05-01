@@ -88,9 +88,10 @@ export function Sidebar({
 type TopbarProps = {
   onSearch?: (value: string) => void;
   userInitials: string;
+  onOpenProfile?: () => void;
 };
 
-export function Topbar({ onSearch, userInitials }: TopbarProps) {
+export function Topbar({ onSearch, userInitials, onOpenProfile }: TopbarProps) {
   return (
     <div className="topbar">
       <div className="search-input">
@@ -106,14 +107,17 @@ export function Topbar({ onSearch, userInitials }: TopbarProps) {
         <span className="status-dot" />
         Platform Online
       </div>
-      <button type="button" className="icon-btn" title="Notifications">
-        <Icon name="bell" />
-        <span className="badge-dot" />
-      </button>
       <div style={{ width: 1, height: 22, background: "var(--border)" }} />
-      <div className="avatar" style={{ width: 30, height: 30 }}>
+      <button
+        type="button"
+        className="avatar"
+        style={{ width: 30, height: 30 }}
+        title="Open profile"
+        aria-label="Open profile page"
+        onClick={onOpenProfile}
+      >
         {userInitials}
-      </div>
+      </button>
     </div>
   );
 }

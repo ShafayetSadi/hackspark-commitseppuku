@@ -161,42 +161,6 @@ function CheckIcon() {
   );
 }
 
-function GoogleIcon() {
-  return (
-    <svg width={15} height={15} viewBox="0 0 24 24" aria-hidden="true">
-      <path
-        fill="#4285F4"
-        d="M22.5 12.3c0-.8-.1-1.5-.2-2.2H12v4.2h5.9c-.3 1.4-1 2.5-2.2 3.3v2.7h3.5c2-1.9 3.3-4.6 3.3-8z"
-      />
-      <path
-        fill="#34A853"
-        d="M12 23c3 0 5.5-1 7.3-2.7l-3.5-2.7c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2v2.8C3.8 20.5 7.6 23 12 23z"
-      />
-      <path
-        fill="#FBBC05"
-        d="M5.7 14.1c-.2-.7-.4-1.4-.4-2.1s.1-1.4.4-2.1V7.1H2C1.4 8.6 1 10.2 1 12s.4 3.4 1 4.9l3.7-2.8z"
-      />
-      <path
-        fill="#EA4335"
-        d="M12 5.4c1.6 0 3.1.6 4.2 1.6l3.1-3.1C17.5 2.2 15 1 12 1 7.6 1 3.8 3.5 2 7.1l3.7 2.8C6.6 7.4 9.1 5.4 12 5.4z"
-      />
-    </svg>
-  );
-}
-
-function AppleIcon() {
-  return (
-    <svg
-      width={15}
-      height={15}
-      viewBox="0 0 24 24"
-      fill="currentColor"
-      aria-hidden="true"
-    >
-      <path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.09zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z" />
-    </svg>
-  );
-}
 
 function FeatureIconShield() {
   return (
@@ -868,17 +832,6 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                         </button>
                       </div>
 
-                      <div className="auth-divider">or continue with</div>
-                      <div className="auth-oauth">
-                        <button type="button" className="btn-oauth" disabled>
-                          <GoogleIcon />
-                          Google
-                        </button>
-                        <button type="button" className="btn-oauth" disabled>
-                          <AppleIcon />
-                          Apple
-                        </button>
-                      </div>
                     </form>
                   ) : (
                     <form onSubmit={handleRegister} noValidate autoComplete="off">
@@ -1057,17 +1010,6 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                         </button>
                       </div>
 
-                      <div className="auth-divider">or sign up with</div>
-                      <div className="auth-oauth">
-                        <button type="button" className="btn-oauth" disabled>
-                          <GoogleIcon />
-                          Google
-                        </button>
-                        <button type="button" className="btn-oauth" disabled>
-                          <AppleIcon />
-                          Apple
-                        </button>
-                      </div>
                     </form>
                   )}
                 </>

@@ -58,29 +58,6 @@ const FEATURE_CARDS: FeatureCard[] = [
   },
 ];
 
-const RECENT_ACTIVITY = [
-  {
-    t: "Inquiry on Premium Camera Kit",
-    m: "Asked about 3-day weekend availability",
-    time: "14m",
-  },
-  {
-    t: "Saved: Outdoor Camping Tent",
-    m: "Added to your watchlist",
-    time: "2h",
-  },
-  {
-    t: "Discount tier updated",
-    m: "Security score 82 → 85, now Elite Trust",
-    time: "Yesterday",
-  },
-  {
-    t: "Trending refresh",
-    m: "New seasonal recommendations available",
-    time: "Yesterday",
-  },
-];
-
 export function Dashboard({ setPage, userName }: DashboardProps) {
   return (
     <div className="content">
@@ -162,10 +139,10 @@ export function Dashboard({ setPage, userName }: DashboardProps) {
       </div>
 
       <div className="stat-grid" style={{ marginBottom: 28 }}>
-        <Stat label="Products" value="487,201" meta="↑ 2.4% this week" />
-        <Stat label="Categories" value="30" meta="across 9 verticals" />
-        <Stat label="Rental records" value="10.2M" meta="last 24 months" />
-        <Stat label="Assistant" value="Online" meta="avg. 1.2s response" />
+        <Stat label="Products API" value="Connected" meta="Live listing + detail + availability" />
+        <Stat label="Analytics API" value="Connected" meta="Trends, surge, recommendations, peak window" />
+        <Stat label="Chat API" value="Connected" meta="Sessions, history, and delete wired" />
+        <Stat label="Auth" value="Protected" meta="JWT session required for /app routes" />
       </div>
 
       <h2 className="section-title">What you can do</h2>
@@ -227,44 +204,7 @@ export function Dashboard({ setPage, userName }: DashboardProps) {
         ))}
       </div>
 
-      <div
-        style={{
-          marginTop: 36,
-          display: "grid",
-          gridTemplateColumns: "2fr 1fr",
-          gap: 12,
-        }}
-      >
-        <div className="card">
-          <h2 className="section-title">Recent activity</h2>
-          <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
-            {RECENT_ACTIVITY.map((row, i) => (
-              <div
-                key={row.t}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "11px 0",
-                  borderTop: i === 0 ? "none" : "1px solid var(--border)",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 500 }}>{row.t}</div>
-                  <div style={{ fontSize: 12, color: "var(--text-3)" }}>
-                    {row.m}
-                  </div>
-                </div>
-                <div
-                  className="mono"
-                  style={{ fontSize: 11, color: "var(--text-3)" }}
-                >
-                  {row.time}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      <div style={{ marginTop: 36 }}>
         <div
           className="card"
           style={{
@@ -673,6 +613,8 @@ export function Analytics() {
   const [mergedFeed, setMergedFeed] = useState<
     Array<{ rentalId: number; productId: number; rentalStart: string; rentalEnd: string }>
   >([]);
+  const [analyticsFrom, setAnalyticsFrom] = useState("2024-01");
+  const [analyticsTo, setAnalyticsTo] = useState("2024-06");
   const [analyticsCategory, setAnalyticsCategory] = useState("");
   const [trendsData, setTrendsData] = useState<Array<{ month: string; rentalCount: number }>>([]);
   const [surgeData, setSurgeData] = useState<
@@ -803,7 +745,7 @@ export function Analytics() {
             cache: "no-store",
           }),
           fetch(
-            `/api/analytics/peak-window?from=${encodeURIComponent(fromMonth)}&to=${encodeURIComponent(toMonth)}`,
+            `/api/analytics/peak-window?from=${encodeURIComponent(analyticsFrom)}&to=${encodeURIComponent(analyticsTo)}`,
             { cache: "no-store" },
           ),
         ]);
@@ -856,8 +798,8 @@ export function Analytics() {
       );
       if (peakWindowPayload.peakWindow) {
         setPeakWindow({
-          from: String(peakWindowPayload.from ?? fromMonth),
-          to: String(peakWindowPayload.to ?? toMonth),
+          from: String(peakWindowPayload.from ?? analyticsFrom),
+          to: String(peakWindowPayload.to ?? analyticsTo),
           peakWindow: {
             start: String(peakWindowPayload.peakWindow.start ?? ""),
             end: String(peakWindowPayload.peakWindow.end ?? ""),
@@ -872,22 +814,54 @@ export function Analytics() {
     }
   };
 
+  const hasAnalyticsData =
+    peakWindow !== null ||
+    trendsData.length > 0 ||
+    surgeData.length > 0 ||
+    recommendationsData.length > 0;
+
+  const trendMax = trendsData.length > 0 ? Math.max(...trendsData.map((d) => d.rentalCount)) : 1;
+
   return (
     <div className="content">
       <PageHeader
         title="Rental Analytics"
         desc="Explore rentals and analytics service endpoints from one workspace."
       />
+
+      {/* ── Analytics service endpoints ─────────────────────────────── */}
       <div className="card" style={{ marginBottom: 14 }}>
-        <h2 className="section-title">Analytics service endpoints</h2>
+        <h2 className="section-title">
+          <Icon name="chart" size={14} /> Analytics service endpoints
+        </h2>
+
+        {/* Controls */}
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1fr 120px auto",
+            gridTemplateColumns: "1fr 1fr 1fr 100px auto",
             gap: 8,
-            marginBottom: 12,
+            marginBottom: 16,
           }}
         >
+          <div className="field">
+            <label className="field-label">From (YYYY-MM)</label>
+            <input
+              className="input"
+              value={analyticsFrom}
+              onChange={(e) => setAnalyticsFrom(e.target.value)}
+              placeholder="2024-01"
+            />
+          </div>
+          <div className="field">
+            <label className="field-label">To (YYYY-MM)</label>
+            <input
+              className="input"
+              value={analyticsTo}
+              onChange={(e) => setAnalyticsTo(e.target.value)}
+              placeholder="2024-06"
+            />
+          </div>
           <div className="field">
             <label className="field-label">Category (optional)</label>
             <input
@@ -898,7 +872,7 @@ export function Analytics() {
             />
           </div>
           <div className="field">
-            <label className="field-label">Recommendations limit</label>
+            <label className="field-label">Rec. limit</label>
             <input
               className="input"
               value={recommendationLimit}
@@ -911,234 +885,457 @@ export function Analytics() {
             <label className="field-label">&nbsp;</label>
             <button
               type="button"
-              className="btn btn-primary"
+              className="btn btn-accent"
               onClick={() => void loadAnalyticsEndpoints()}
               disabled={isLoadingAnalytics}
             >
-              {isLoadingAnalytics ? "Loading..." : "Load analytics"}
+              {isLoadingAnalytics ? "Loading…" : "Load analytics"}
             </button>
           </div>
         </div>
-        {analyticsError ? <div className="result-warn">{analyticsError}</div> : null}
-        {peakWindow ? (
-          <div className="result-success" style={{ marginBottom: 10 }}>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>
-              Peak window: {peakWindow.peakWindow.start} → {peakWindow.peakWindow.end}
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 4 }}>
-              Range {peakWindow.from} → {peakWindow.to} · total rentals:{" "}
-              {peakWindow.peakWindow.totalRentals}
-            </div>
-          </div>
-        ) : null}
-        {trendsData.length > 0 ? (
-          <div style={{ marginBottom: 10 }}>
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>
-              TRENDS
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {trendsData.map((item) => (
-                <div
-                  key={item.month}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    padding: "8px 10px",
-                  }}
-                >
-                  <span>{item.month}</span>
-                  <span className="mono">{item.rentalCount}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {surgeData.length > 0 ? (
-          <div style={{ marginBottom: 10 }}>
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>
-              SURGE
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {surgeData.map((item) => (
-                <div
-                  key={`${item.period}-${item.actualRentals}`}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    padding: "8px 10px",
-                  }}
-                >
-                  <span>{item.period}</span>
-                  <span className="mono">
-                    x{item.surgeMultiplier} ({item.actualRentals}/{item.baselineRentals})
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-        {recommendationsData.length > 0 ? (
-          <div>
-            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>
-              RECOMMENDATIONS
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {recommendationsData.map((item) => (
-                <div
-                  key={`${item.productId}-${item.name}`}
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    border: "1px solid var(--border)",
-                    borderRadius: 8,
-                    padding: "8px 10px",
-                  }}
-                >
-                  <span>
-                    {item.name} (#{item.productId})
-                  </span>
-                  <span className="mono">{item.score.toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
-      </div>
 
-      <div className="card" style={{ marginBottom: 14 }}>
-        <h2 className="section-title">Kth busiest date</h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr 120px auto",
-            gap: 8,
-            marginBottom: 12,
-          }}
-        >
-          <div className="field">
-            <label className="field-label">From (YYYY-MM)</label>
-            <input
-              className="input"
-              value={fromMonth}
-              onChange={(e) => setFromMonth(e.target.value)}
-              placeholder="2024-01"
-            />
-          </div>
-          <div className="field">
-            <label className="field-label">To (YYYY-MM)</label>
-            <input
-              className="input"
-              value={toMonth}
-              onChange={(e) => setToMonth(e.target.value)}
-              placeholder="2024-06"
-            />
-          </div>
-          <div className="field">
-            <label className="field-label">K</label>
-            <input
-              className="input"
-              value={rank}
-              onChange={(e) => setRank(e.target.value)}
-              placeholder="3"
-              inputMode="numeric"
-            />
-          </div>
-          <div className="field">
-            <label className="field-label">&nbsp;</label>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void runKthBusiest()}
-              disabled={isLoadingKth}
-            >
-              {isLoadingKth ? "Checking..." : "Check"}
-            </button>
-          </div>
-        </div>
-        {kthError ? <div className="result-warn">{kthError}</div> : null}
-        {kthResult ? (
-          <div className="result-success">
-            <div style={{ fontSize: 14, fontWeight: 600 }}>
-              #{kthResult.k} busiest date: {kthResult.date}
-            </div>
-            <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 4 }}>
-              Range {kthResult.from} → {kthResult.to} · rentals: {kthResult.rentalCount}
-            </div>
+        {analyticsError ? (
+          <div className="result-warn">{analyticsError}</div>
+        ) : null}
+
+        {/* Empty state */}
+        {!isLoadingAnalytics && !analyticsError && !hasAnalyticsData ? (
+          <div
+            style={{
+              padding: "28px 0",
+              textAlign: "center",
+              color: "var(--text-3)",
+              fontSize: 13,
+            }}
+          >
+            Set filters above and click{" "}
+            <strong style={{ color: "var(--text-2)" }}>Load analytics</strong> to see
+            trends, surge periods, and recommendations.
           </div>
         ) : null}
-      </div>
-      <div className="card" style={{ marginBottom: 14 }}>
-        <h2 className="section-title">Merged product rental feed</h2>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 120px auto",
-            gap: 8,
-            marginBottom: 12,
-          }}
-        >
-          <div className="field">
-            <label className="field-label">Product IDs (comma-separated)</label>
-            <input
-              className="input"
-              value={mergedIds}
-              onChange={(e) => setMergedIds(e.target.value)}
-              placeholder="12,47,88"
-            />
-          </div>
-          <div className="field">
-            <label className="field-label">Limit</label>
-            <input
-              className="input"
-              value={mergedLimit}
-              onChange={(e) => setMergedLimit(e.target.value)}
-              placeholder="30"
-              inputMode="numeric"
-            />
-          </div>
-          <div className="field">
-            <label className="field-label">&nbsp;</label>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void loadMergedFeed()}
-              disabled={isLoadingMerged}
-            >
-              {isLoadingMerged ? "Loading..." : "Load feed"}
-            </button>
-          </div>
-        </div>
-        {mergedError ? <div className="result-warn">{mergedError}</div> : null}
-        {mergedFeed.length > 0 ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {mergedFeed.map((item) => (
+
+        {/* Peak Window — full-width highlighted banner */}
+        {peakWindow ? (
+          <div
+            className="result-success"
+            style={{
+              marginBottom: 14,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 16,
+            }}
+          >
+            <div>
               <div
-                key={`${item.rentalId}-${item.productId}`}
+                className="mono"
                 style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "10px 12px",
-                  border: "1px solid var(--border)",
-                  borderRadius: 8,
+                  fontSize: 10.5,
+                  color: "var(--accent-deep)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  marginBottom: 6,
                 }}
               >
-                <div style={{ fontSize: 12.5 }}>
-                  Rental #{item.rentalId} · Product #{item.productId}
-                </div>
-                <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>
-                  {item.rentalStart} → {item.rentalEnd}
-                </div>
+                Peak rental window
               </div>
-            ))}
+              <div
+                style={{
+                  fontSize: 20,
+                  fontWeight: 600,
+                  letterSpacing: "-0.02em",
+                  color: "var(--text)",
+                }}
+              >
+                {peakWindow.peakWindow.start} → {peakWindow.peakWindow.end}
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 4 }}>
+                Query range: {peakWindow.from} → {peakWindow.to}
+              </div>
+            </div>
+            <div style={{ textAlign: "right", flexShrink: 0 }}>
+              <div
+                className="mono"
+                style={{
+                  fontSize: 10.5,
+                  color: "var(--accent-deep)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  marginBottom: 6,
+                }}
+              >
+                Total rentals
+              </div>
+              <div
+                style={{
+                  fontSize: 32,
+                  fontWeight: 600,
+                  letterSpacing: "-0.03em",
+                  color: "var(--accent-deep)",
+                  lineHeight: 1,
+                }}
+              >
+                {peakWindow.peakWindow.totalRentals.toLocaleString()}
+              </div>
+            </div>
+          </div>
+        ) : null}
+
+        {/* 3-column results grid */}
+        {hasAnalyticsData ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 12,
+            }}
+          >
+            {/* Trends */}
+            <div
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: 14,
+              }}
+            >
+              <div
+                className="mono"
+                style={{
+                  fontSize: 10.5,
+                  color: "var(--text-3)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  marginBottom: 10,
+                }}
+              >
+                Trends
+              </div>
+              {trendsData.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {trendsData.map((item) => (
+                    <div key={item.month}>
+                      <div
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          fontSize: 12,
+                          marginBottom: 3,
+                        }}
+                      >
+                        <span>{item.month}</span>
+                        <span className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>
+                          {item.rentalCount.toLocaleString()}
+                        </span>
+                      </div>
+                      <div
+                        style={{
+                          height: 4,
+                          background: "var(--border)",
+                          borderRadius: 2,
+                          overflow: "hidden",
+                        }}
+                      >
+                        <div
+                          style={{
+                            height: "100%",
+                            width: `${(item.rentalCount / trendMax) * 100}%`,
+                            background: "var(--accent)",
+                            borderRadius: 2,
+                            transition: "width 0.3s ease",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--text-3)" }}>No trend data</div>
+              )}
+            </div>
+
+            {/* Surge */}
+            <div
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: 14,
+              }}
+            >
+              <div
+                className="mono"
+                style={{
+                  fontSize: 10.5,
+                  color: "var(--text-3)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  marginBottom: 10,
+                }}
+              >
+                Surge periods
+              </div>
+              {surgeData.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {surgeData.map((item) => (
+                    <div
+                      key={`${item.period}-${item.actualRentals}`}
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "flex-start",
+                        gap: 8,
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 500 }}>{item.period}</div>
+                        <div
+                          className="mono"
+                          style={{ fontSize: 11, color: "var(--text-3)", marginTop: 1 }}
+                        >
+                          {item.actualRentals} / {item.baselineRentals} baseline
+                        </div>
+                      </div>
+                      <span
+                        className={`badge ${item.surgeMultiplier >= 2 ? "badge-warn" : "badge-accent"}`}
+                        style={{ flexShrink: 0 }}
+                      >
+                        ×{item.surgeMultiplier}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--text-3)" }}>No surge data</div>
+              )}
+            </div>
+
+            {/* Recommendations */}
+            <div
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--border)",
+                borderRadius: 10,
+                padding: 14,
+              }}
+            >
+              <div
+                className="mono"
+                style={{
+                  fontSize: 10.5,
+                  color: "var(--text-3)",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.07em",
+                  marginBottom: 10,
+                }}
+              >
+                Recommendations
+              </div>
+              {recommendationsData.length > 0 ? (
+                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                  {recommendationsData.map((item, i) => (
+                    <div
+                      key={`${item.productId}-${item.name}`}
+                      style={{ display: "flex", alignItems: "center", gap: 8 }}
+                    >
+                      <div
+                        className="mono"
+                        style={{
+                          width: 20,
+                          height: 20,
+                          borderRadius: 4,
+                          background: "var(--border)",
+                          display: "grid",
+                          placeItems: "center",
+                          fontSize: 10,
+                          color: "var(--text-3)",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {i + 1}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div
+                          style={{
+                            fontSize: 12,
+                            fontWeight: 500,
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {item.name}
+                        </div>
+                        <div
+                          className="mono"
+                          style={{ fontSize: 11, color: "var(--text-3)", marginTop: 1 }}
+                        >
+                          #{item.productId}
+                        </div>
+                      </div>
+                      <span className="badge" style={{ flexShrink: 0 }}>
+                        {item.score.toFixed(2)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ fontSize: 12, color: "var(--text-3)" }}>No recommendations</div>
+              )}
+            </div>
           </div>
         ) : null}
       </div>
 
+      {/* ── Kth busiest  +  Merged feed  ────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+
+        {/* Kth busiest date */}
+        <div className="card">
+          <h2 className="section-title">
+            <Icon name="trending" size={14} /> Kth busiest date
+          </h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr 80px",
+              gap: 8,
+              marginBottom: 10,
+            }}
+          >
+            <div className="field">
+              <label className="field-label">From (YYYY-MM)</label>
+              <input
+                className="input"
+                value={fromMonth}
+                onChange={(e) => setFromMonth(e.target.value)}
+                placeholder="2024-01"
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">To (YYYY-MM)</label>
+              <input
+                className="input"
+                value={toMonth}
+                onChange={(e) => setToMonth(e.target.value)}
+                placeholder="2024-06"
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">K</label>
+              <input
+                className="input"
+                value={rank}
+                onChange={(e) => setRank(e.target.value)}
+                placeholder="3"
+                inputMode="numeric"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-accent"
+            style={{ width: "100%" }}
+            onClick={() => void runKthBusiest()}
+            disabled={isLoadingKth}
+          >
+            {isLoadingKth ? "Checking…" : "Find kth busiest date"}
+          </button>
+          {kthError ? (
+            <div className="result-warn" style={{ marginTop: 10 }}>
+              {kthError}
+            </div>
+          ) : null}
+          {kthResult ? (
+            <div className="result-success" style={{ marginTop: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>
+                #{kthResult.k} busiest date: {kthResult.date}
+              </div>
+              <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 4 }}>
+                {kthResult.from} → {kthResult.to} · {kthResult.rentalCount} rentals
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        {/* Merged product rental feed */}
+        <div className="card">
+          <h2 className="section-title">
+            <Icon name="sort" size={14} /> Merged product rental feed
+          </h2>
+          <div
+            style={{ display: "grid", gridTemplateColumns: "1fr 80px", gap: 8, marginBottom: 10 }}
+          >
+            <div className="field">
+              <label className="field-label">Product IDs (comma-separated)</label>
+              <input
+                className="input"
+                value={mergedIds}
+                onChange={(e) => setMergedIds(e.target.value)}
+                placeholder="12,47,88"
+              />
+            </div>
+            <div className="field">
+              <label className="field-label">Limit</label>
+              <input
+                className="input"
+                value={mergedLimit}
+                onChange={(e) => setMergedLimit(e.target.value)}
+                placeholder="30"
+                inputMode="numeric"
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            className="btn btn-accent"
+            style={{ width: "100%" }}
+            onClick={() => void loadMergedFeed()}
+            disabled={isLoadingMerged}
+          >
+            {isLoadingMerged ? "Loading…" : "Load feed"}
+          </button>
+          {mergedError ? (
+            <div className="result-warn" style={{ marginTop: 10 }}>
+              {mergedError}
+            </div>
+          ) : null}
+          {mergedFeed.length > 0 ? (
+            <div
+              style={{
+                marginTop: 10,
+                display: "flex",
+                flexDirection: "column",
+                gap: 5,
+                maxHeight: 280,
+                overflowY: "auto",
+              }}
+            >
+              {mergedFeed.map((item) => (
+                <div
+                  key={`${item.rentalId}-${item.productId}`}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    padding: "8px 10px",
+                    border: "1px solid var(--border)",
+                    borderRadius: 7,
+                  }}
+                >
+                  <div style={{ fontSize: 12.5 }}>
+                    Rental #{item.rentalId} · Product #{item.productId}
+                  </div>
+                  <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>
+                    {item.rentalStart} → {item.rentalEnd}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+
+      </div>
     </div>
   );
 }

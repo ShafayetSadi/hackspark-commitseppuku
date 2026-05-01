@@ -6,6 +6,7 @@ import {
   type ChatSession,
   SUGGESTED_PROMPTS,
 } from "../data";
+import { CompanyLogoMark } from "../../components/company-logo";
 
 import { Badge, Icon } from "./primitives";
 
@@ -19,7 +20,20 @@ type ChatMessage = {
 const FALLBACK_REPLY =
   "Sorry — I couldn't reach the assistant just now. Try again in a moment.";
 
-export function Chat() {
+function AssistantAvatar() {
+  return (
+    <div className="chat-avatar assistant">
+      <CompanyLogoMark width={14} height={14} />
+    </div>
+  );
+}
+
+type ChatProps = {
+  autoSendPrompt?: string | null;
+  onAutoSendConsumed?: () => void;
+};
+
+export function Chat({ autoSendPrompt = null, onAutoSendConsumed }: ChatProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -69,6 +83,13 @@ export function Chat() {
       node.parentElement.scrollTop = node.parentElement.scrollHeight;
     }
   }, [messages, loading]);
+
+  useEffect(() => {
+    if (!autoSendPrompt || autoSendPrompt.trim().length === 0) return;
+    if (loading) return;
+    void send(autoSendPrompt);
+    onAutoSendConsumed?.();
+  }, [autoSendPrompt, loading]);
 
   const send = async (text?: string) => {
     const content = (text ?? input).trim();
@@ -241,7 +262,7 @@ export function Chat() {
 
       <div className="chat-main">
         <div className="chat-header">
-          <div className="chat-avatar assistant" />
+          <AssistantAvatar />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 14, fontWeight: 600 }}>
               RentPi Assistant
@@ -274,7 +295,9 @@ export function Chat() {
               <div
                 className="chat-avatar assistant"
                 style={{ width: 44, height: 44, marginBottom: 16 }}
-              />
+              >
+                <CompanyLogoMark width={20} height={20} />
+              </div>
               <h2
                 style={{
                   fontSize: 20,
@@ -312,16 +335,18 @@ export function Chat() {
 
           {messages.map((m, i) => (
             <div key={i} className={`chat-msg ${m.role}`}>
-              <div className={`chat-avatar ${m.role}`}>
-                {m.role === "user" ? "AR" : ""}
-              </div>
+              {m.role === "assistant" ? (
+                <AssistantAvatar />
+              ) : (
+                <div className="chat-avatar user">AR</div>
+              )}
               <div className="chat-bubble">{m.content}</div>
             </div>
           ))}
 
           {loading ? (
             <div className="chat-msg assistant">
-              <div className="chat-avatar assistant" />
+              <AssistantAvatar />
               <div className="chat-bubble">
                 <div
                   style={{

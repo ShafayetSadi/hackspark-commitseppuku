@@ -6,6 +6,7 @@ import {
   type Category,
   CATEGORIES,
   type CategoryFilter,
+  type PageId,
 } from "../data";
 
 import { Badge, Icon, PageHeader, Placeholder } from "./primitives";
@@ -13,9 +14,12 @@ import { Badge, Icon, PageHeader, Placeholder } from "./primitives";
 type ProductsProps = {
   filterCategory: CategoryFilter;
   setFilterCategory: (value: CategoryFilter) => void;
+  setPage: (page: PageId) => void;
+  setChatAutoPrompt: (value: string | null) => void;
+  setAvailabilityPrefillProductId: (value: number | null) => void;
 };
 
-const PER_PAGE = 12;
+const DEFAULT_LIMIT = 20;
 
 type Product = {
   id: number;
@@ -56,10 +60,17 @@ function toKnownCategory(value: string): Category {
   return matched ?? "Electronics";
 }
 
-export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
+export function Products({
+  filterCategory,
+  setFilterCategory,
+  setPage,
+  setChatAutoPrompt,
+  setAvailabilityPrefillProductId,
+}: ProductsProps) {
   const [ownerId, setOwnerId] = useState("");
   const [selected, setSelected] = useState<Product | null>(null);
   const [pageNumber, setPageNumber] = useState(1);
+  const [pageLimit, setPageLimit] = useState(DEFAULT_LIMIT);
   const [products, setProducts] = useState<Product[]>([]);
   const [total, setTotal] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
@@ -80,7 +91,7 @@ export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
       try {
         const query = new URLSearchParams({
           page: String(pageNumber),
-          limit: String(PER_PAGE),
+          limit: String(pageLimit),
         });
         if (normalizedCategory) query.set("category", normalizedCategory);
         if (ownerId.trim()) query.set("owner_id", ownerId.trim());
@@ -99,13 +110,28 @@ export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
 
         const payload = (await response.json()) as {
           data?: Record<string, unknown>[];
+          page?: number;
+          limit?: number;
           total?: number;
           totalPages?: number;
         };
         const next = Array.isArray(payload.data) ? payload.data.map(mapProduct) : [];
+        const resolvedLimit = Math.max(1, Number(payload.limit ?? pageLimit));
+        const resolvedTotal = Number(payload.total ?? next.length);
+        const resolvedTotalPages = Math.max(
+          1,
+          Number(
+            payload.totalPages ??
+              (resolvedLimit > 0
+                ? Math.ceil(resolvedTotal / resolvedLimit)
+                : 1),
+          ),
+        );
         setProducts(next);
-        setTotal(Number(payload.total ?? next.length));
-        setTotalPages(Math.max(1, Number(payload.totalPages ?? 1)));
+        setPageNumber(Math.max(1, Number(payload.page ?? pageNumber)));
+        setPageLimit(resolvedLimit);
+        setTotal(resolvedTotal);
+        setTotalPages(resolvedTotalPages);
       } catch {
         if (!controller.signal.aborted) {
           setErrorMessage("Could not load products right now.");
@@ -119,9 +145,9 @@ export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
     };
     void loadProducts();
     return () => controller.abort();
-  }, [normalizedCategory, ownerId, pageNumber]);
+  }, [normalizedCategory, ownerId, pageNumber, pageLimit]);
 
-  const setPage = (next: number) => {
+  const setPageNumberClamped = (next: number) => {
     setPageNumber(Math.max(1, Math.min(next, totalPages)));
   };
 
@@ -213,10 +239,20 @@ export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
           />
         </div>
         <div className="field">
-          <label className="field-label">Items per page</label>
-          <div className="mono" style={{ fontSize: 12, color: "var(--text-3)", paddingBottom: 8 }}>
-            {PER_PAGE}
-          </div>
+          <label className="field-label">Items per page (limit)</label>
+          <select
+            className="input"
+            value={String(pageLimit)}
+            onChange={(e) => {
+              setPageLimit(Math.max(1, Number(e.target.value) || DEFAULT_LIMIT));
+              setPageNumber(1);
+            }}
+          >
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+          </select>
         </div>
         <button
           type="button"
@@ -344,6 +380,9 @@ export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
                 >
                   {p.description ?? "View details for complete product information."}
                 </div>
+                <div className="mono" style={{ fontSize: 10.5, color: "var(--text-4)" }}>
+                  Owner #{p.ownerId}
+                </div>
                 <div className="product-meta">
                   <div className="product-price">
                     ৳{p.pricePerDay}
@@ -387,7 +426,7 @@ export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
               type="button"
               className="btn btn-secondary btn-sm"
               disabled={pageNumber === 1}
-              onClick={() => setPage(pageNumber - 1)}
+              onClick={() => setPageNumberClamped(pageNumber - 1)}
             >
               Previous
             </button>
@@ -395,7 +434,7 @@ export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
               type="button"
               className="btn btn-secondary btn-sm"
               disabled={pageNumber === totalPages}
-              onClick={() => setPage(pageNumber + 1)}
+              onClick={() => setPageNumberClamped(pageNumber + 1)}
             >
               Next
             </button>
@@ -408,6 +447,14 @@ export function Products({ filterCategory, setFilterCategory }: ProductsProps) {
         product={selected}
         isLoading={isDetailsLoading}
         onClose={() => setSelected(null)}
+        onCheckAvailability={(productId) => {
+          setAvailabilityPrefillProductId(productId);
+          setPage("availability");
+        }}
+        onAskAssistant={(prompt) => {
+          setChatAutoPrompt(prompt);
+          setPage("chat");
+        }}
       />
     </div>
   );
@@ -417,10 +464,14 @@ function ProductDrawer({
   product,
   isLoading,
   onClose,
+  onCheckAvailability,
+  onAskAssistant,
 }: {
   product: Product | null;
   isLoading: boolean;
   onClose: () => void;
+  onCheckAvailability: (productId: number) => void;
+  onAskAssistant: (prompt: string) => void;
 }) {
   const open = !!product || isLoading;
   const [freeStreak, setFreeStreak] = useState<{
@@ -573,15 +624,23 @@ function ProductDrawer({
               </div>
             </div>
             <div className="drawer-footer">
-              <button type="button" className="btn btn-ghost">
-                <Icon name="sparkle" size={13} /> Ask assistant
-              </button>
-              <div style={{ flex: 1 }} />
-              <button type="button" className="btn btn-secondary">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => onCheckAvailability(product.id)}
+              >
                 Check availability
               </button>
-              <button type="button" className="btn btn-accent">
-                Request rental
+              <button
+                type="button"
+                className="btn btn-ghost"
+                onClick={() =>
+                  onAskAssistant(
+                    `I am checking product #${product.id} (${product.name}, ${product.category}) with price ${product.pricePerDay} per day. Summarize this product and suggest the best next steps before renting.`,
+                  )
+                }
+              >
+                <Icon name="sparkle" size={13} /> Ask assistant
               </button>
             </div>
           </>
