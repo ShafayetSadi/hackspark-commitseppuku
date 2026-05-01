@@ -20,11 +20,11 @@ type AppUser = {
 };
 
 type AppShellProps = {
-  initialUser: AppUser | null;
+  initialUser: AppUser;
 };
 
 function initialsFor(name: string | undefined): string {
-  if (!name) return "AR";
+  if (!name) return "U";
   const parts = name.trim().split(/\s+/);
   if (parts.length === 0) return "AR";
   if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
@@ -37,13 +37,13 @@ export default function AppShell({ initialUser }: AppShellProps) {
     useState<CategoryFilter>("All");
 
   const userInitials = initialsFor(initialUser?.full_name);
-  const userName = initialUser?.full_name ?? "Ayesha R.";
-  const userEmail = initialUser?.email ?? "ayesha@rentpi.app";
+  const userName = initialUser.full_name;
+  const userEmail = initialUser.email;
 
   const renderPage = () => {
     switch (page) {
       case "dashboard":
-        return <Dashboard setPage={setPage} />;
+        return <Dashboard setPage={setPage} userName={userName} />;
       case "products":
         return (
           <Products
@@ -63,11 +63,11 @@ export default function AppShell({ initialUser }: AppShellProps) {
       case "chat":
         return <Chat />;
       case "profile":
-        return <Profile />;
+        return <Profile user={initialUser} />;
       case "analytics":
         return <Analytics />;
       default:
-        return <Dashboard setPage={setPage} />;
+        return <Dashboard setPage={setPage} userName={userName} />;
     }
   };
 

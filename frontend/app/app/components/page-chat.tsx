@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from "react";
 
 import {
-  CHAT_SESSIONS,
   type ChatSession,
   SUGGESTED_PROMPTS,
 } from "../data";
@@ -21,7 +20,7 @@ const FALLBACK_REPLY =
   "Sorry — I couldn't reach the assistant just now. Try again in a moment.";
 
 export function Chat() {
-  const [sessions, setSessions] = useState<ChatSession[]>(CHAT_SESSIONS);
+  const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [activeSession, setActiveSession] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -52,7 +51,7 @@ export function Chat() {
           .filter((s) => s.id.length > 0);
         if (next.length > 0) setSessions(next);
       } catch {
-        // Keep local fallback sessions.
+        // Keep empty sessions until service is reachable.
       }
     };
     void loadSessions();
