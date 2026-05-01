@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Request
+from fastapi.openapi.utils import get_openapi
 from fastapi.responses import JSONResponse
 
 from gateway.api.routes import router
@@ -35,6 +36,55 @@ app = FastAPI(
     openapi_url="/openapi.json" if settings.gateway_docs_enabled else None,
 )
 app.state.logger = logger
+
+PUBLIC_OPENAPI_PATHS = {
+    "/health",
+    "/status",
+    "/{service_name}/status",
+    "/users/login",
+    "/users/register",
+}
+
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+        description=(
+            "Use `/users/register` or `/users/login` to get a JWT, then click "
+            "`Authorize` and enter `Bearer <token>` to call protected endpoints."
+        ),
+    )
+
+    components = openapi_schema.setdefault("components", {})
+    security_schemes = components.setdefault("securitySchemes", {})
+    security_schemes["BearerAuth"] = {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+    }
+
+    paths = openapi_schema.get("paths", {})
+    for path, path_item in paths.items():
+        if path in PUBLIC_OPENAPI_PATHS:
+            continue
+
+        for method, operation in path_item.items():
+            if method.lower() not in {"get", "post", "put", "patch", "delete"}:
+                continue
+            operation["security"] = [{"BearerAuth": []}]
+            responses = operation.setdefault("responses", {})
+            responses.setdefault("401", {"description": "Missing or invalid bearer token"})
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 
 
 @app.middleware("http")
