@@ -5,7 +5,7 @@ This is a Next.js (App Router) frontend for the Hackspark backend.
 ## Features
 
 - Register (`POST /auth/register`)
-- Login (`POST /auth/login`)
+- Login (`POST /users/login`)
 - Session lookup (`GET /auth/me`)
 - Logout (local cookie clear)
 

@@ -13,6 +13,16 @@ services:
       timeout: 5s
       retries: 10
 
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   mongodb:
     image: mongo:7-jammy
     volumes:
@@ -36,8 +46,11 @@ services:
       POSTGRES_PORT: 5432
       SERVICE_PORT: 8001
       GRPC_PORT: 50051
+      CENTRAL_API_REDIS_URL: ${CENTRAL_API_REDIS_URL:-redis://redis:6379/0}
     depends_on:
       postgres:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/status')"]
@@ -55,6 +68,10 @@ services:
       APP_ENV: prod
       SERVICE_PORT: 8002
       GRPC_PORT: 50052
+      CENTRAL_API_REDIS_URL: ${CENTRAL_API_REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/status')"]
       interval: 10s
@@ -71,6 +88,10 @@ services:
       APP_ENV: prod
       SERVICE_PORT: 8003
       GRPC_PORT: 50053
+      CENTRAL_API_REDIS_URL: ${CENTRAL_API_REDIS_URL:-redis://redis:6379/0}
+    depends_on:
+      redis:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/status')"]
       interval: 10s
@@ -87,8 +108,11 @@ services:
       APP_ENV: prod
       SERVICE_PORT: 8004
       GRPC_PORT: 50054
+      CENTRAL_API_REDIS_URL: ${CENTRAL_API_REDIS_URL:-redis://redis:6379/0}
     depends_on:
       mongodb:
+        condition: service_healthy
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/status')"]
@@ -191,6 +215,7 @@ services:
 
 volumes:
   postgres_data:
+  redis_data:
   mongo_data:
   prometheus_data:
   grafana_data:

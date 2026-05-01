@@ -21,7 +21,13 @@ class AnalyticsServicer(analytics_pb2_grpc.AnalyticsServiceServicer):
         self._settings = get_settings()
 
     def _client(self) -> CentralAPIClient:
-        return CentralAPIClient(self._settings.central_api_url, self._settings.central_api_token)
+        return CentralAPIClient(
+            self._settings.central_api_url,
+            self._settings.central_api_token,
+            redis_url=self._settings.central_api_redis_url,
+            max_calls=self._settings.central_api_rate_limit,
+            window_seconds=self._settings.central_api_rate_window_seconds,
+        )
 
     async def GetTrends(
         self, request: analytics_pb2.TrendsRequest, context: grpc.aio.ServicerContext

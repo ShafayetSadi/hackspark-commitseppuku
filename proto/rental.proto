@@ -15,6 +15,7 @@ message ProductsQuery {
   string category = 1;
   string page = 2;
   string limit = 3;
+  map<string, string> extra_params = 4;
 }
 
 message GetProductRequest {

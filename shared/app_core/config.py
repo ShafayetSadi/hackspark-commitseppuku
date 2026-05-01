@@ -19,6 +19,9 @@ class CommonSettings(BaseSettings):
     postgres_port: int = 5432
     sqlite_path: str = "./service.db"
     database_backend: str = "postgresql"
+    central_api_rate_limit: int = 20
+    central_api_rate_window_seconds: float = 60.0
+    central_api_redis_url: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

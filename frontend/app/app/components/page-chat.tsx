@@ -30,6 +30,35 @@ export function Chat() {
   const sessionCounterRef = useRef(0);
 
   useEffect(() => {
+    const loadSessions = async () => {
+      try {
+        const response = await fetch("/api/chat/sessions", { cache: "no-store" });
+        if (!response.ok) return;
+        const payload = (await response.json()) as {
+          sessions?: Array<{
+            sessionId?: string;
+            session_id?: string;
+            name?: string;
+            lastMessageAt?: string;
+            updated_at?: string;
+          }>;
+        };
+        const next = (payload.sessions ?? [])
+          .map((s) => ({
+            id: s.sessionId ?? s.session_id ?? "",
+            title: s.name ?? "Untitled chat",
+            time: s.lastMessageAt ?? s.updated_at ?? "recent",
+          }))
+          .filter((s) => s.id.length > 0);
+        if (next.length > 0) setSessions(next);
+      } catch {
+        // Keep local fallback sessions.
+      }
+    };
+    void loadSessions();
+  }, []);
+
+  useEffect(() => {
     const node = messagesEndRef.current;
     if (node?.parentElement) {
       node.parentElement.scrollTop = node.parentElement.scrollHeight;
@@ -46,12 +75,13 @@ export function Chat() {
     setInput("");
     setLoading(true);
 
-    if (!activeSession) {
+    let sessionId = activeSession;
+    if (!sessionId) {
       // Use a monotonically-increasing ref for session ids so we don't have
       // to call `Date.now()` (which the React purity lint rule flags inside
       // component bodies).
       sessionCounterRef.current += 1;
-      const sessionId = `new-${sessionCounterRef.current}`;
+      sessionId = `new-${sessionCounterRef.current}`;
       const newSess: ChatSession = {
         id: sessionId,
         title:
@@ -63,24 +93,26 @@ export function Chat() {
     }
 
     try {
-      const response = await fetch("/api/ai/chat", {
+      const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: newMessages.map((m) => ({
-            role: m.role,
-            content: m.content,
-          })),
+          sessionId,
+          message: content,
         }),
       });
 
       let reply = FALLBACK_REPLY;
       if (response.ok) {
         const payload = (await response.json()) as {
+          sessionId?: string;
           reply?: string;
           answer?: string;
           message?: string;
         };
+        if (payload.sessionId && payload.sessionId !== sessionId) {
+          setActiveSession(payload.sessionId);
+        }
         reply =
           payload.reply ||
           payload.answer ||
@@ -105,6 +137,42 @@ export function Chat() {
     setMessages([]);
     setActiveSession(null);
     setInput("");
+  };
+
+  const loadHistory = async (sessionId: string) => {
+    setActiveSession(sessionId);
+    try {
+      const response = await fetch(`/api/chat/${sessionId}/history`, {
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+      const payload = (await response.json()) as {
+        messages?: Array<{ role?: ChatRole; content?: string; message?: string }>;
+      };
+      const nextMessages = (payload.messages ?? [])
+        .map((m) => ({
+          role: m.role === "assistant" ? "assistant" : "user",
+          content: m.content ?? m.message ?? "",
+        }))
+        .filter((m) => m.content.length > 0);
+      setMessages(nextMessages);
+    } catch {
+      // Ignore and keep current messages.
+    }
+  };
+
+  const deleteSession = async (sessionId: string) => {
+    try {
+      const response = await fetch(`/api/chat/${sessionId}`, { method: "DELETE" });
+      if (!response.ok) return;
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+      if (activeSession === sessionId) {
+        setActiveSession(null);
+        setMessages([]);
+      }
+    } catch {
+      // Ignore delete failures in UI.
+    }
   };
 
   return (
@@ -133,10 +201,24 @@ export function Chat() {
               className={`chat-session ${
                 activeSession === s.id ? "active" : ""
               }`}
-              onClick={() => setActiveSession(s.id)}
+              onClick={() => void loadHistory(s.id)}
             >
               <div className="chat-session-title">{s.title}</div>
-              <div className="chat-session-time">{s.time}</div>
+              <div className="chat-session-time">
+                {s.time}
+                <button
+                  type="button"
+                  className="icon-btn"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void deleteSession(s.id);
+                  }}
+                  aria-label="Delete chat session"
+                  style={{ marginLeft: 8 }}
+                >
+                  <Icon name="close" size={11} />
+                </button>
+              </div>
             </div>
           ))}
         </div>

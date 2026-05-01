@@ -29,7 +29,7 @@ async function getInitialUser(): Promise<AuthUser | null> {
   }
 
   try {
-    const response = await fetch(`${getGatewayUrl()}/auth/me`, {
+    const response = await fetch(`${getGatewayUrl()}/users/me`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -41,8 +41,17 @@ async function getInitialUser(): Promise<AuthUser | null> {
       return null;
     }
 
-    const payload = (await response.json()) as AuthUser;
-    return payload;
+    const payload = (await response.json()) as {
+      id: number;
+      email: string;
+      name?: string;
+      full_name?: string;
+    };
+    return {
+      id: payload.id,
+      email: payload.email,
+      full_name: payload.name ?? payload.full_name ?? "",
+    };
   } catch {
     return null;
   }

@@ -162,11 +162,19 @@ async def list_products(request: Request, settings: GatewaySettings = Depends(ge
                 category=params.get("category", ""),
                 page=params.get("page", ""),
                 limit=params.get("limit", ""),
+                extra_params={
+                    key: value
+                    for key, value in params.items()
+                    if key not in {"category", "page", "limit"}
+                },
             )
         )
         return JSONResponse(content=json.loads(resp.json_data))
     except grpc.RpcError as exc:
-        raise grpc_to_http_exception(exc) from exc
+        http_exc = grpc_to_http_exception(exc)
+        if isinstance(http_exc.detail, dict):
+            return JSONResponse(status_code=http_exc.status_code, content=http_exc.detail)
+        raise http_exc from exc
 
 
 @router.get("/rentals/products/{product_id}")

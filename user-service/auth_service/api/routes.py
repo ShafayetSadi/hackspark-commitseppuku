@@ -61,5 +61,11 @@ async def discount(
     user_id: int,
     settings: AuthSettings = Depends(get_settings),
 ):
-    client = CentralAPIClient(settings.central_api_url, settings.central_api_token)
+    client = CentralAPIClient(
+        settings.central_api_url,
+        settings.central_api_token,
+        redis_url=settings.central_api_redis_url,
+        max_calls=settings.central_api_rate_limit,
+        window_seconds=settings.central_api_rate_window_seconds,
+    )
     return await get_user_discount(client, user_id=user_id)

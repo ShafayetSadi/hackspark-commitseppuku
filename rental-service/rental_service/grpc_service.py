@@ -52,6 +52,7 @@ class RentalServicer(rental_pb2_grpc.RentalServiceServicer):
                 category=request.category or None,
                 page=request.page or None,
                 limit=request.limit or None,
+                extra_params=dict(request.extra_params),
             )
             return RENTAL_PB2.ProductsResponse(json_data=json.dumps(data))
         except HTTPException as exc:
