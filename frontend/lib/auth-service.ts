@@ -1,8 +1,9 @@
 export const AUTH_TOKEN_COOKIE = "hackspark_auth_token";
 
 export type TokenResponse = {
-  access_token: string;
-  token_type: string;
+  access_token?: string;
+  token_type?: string;
+  token?: string;
 };
 
 export function getGatewayUrl(): string {
@@ -34,4 +35,14 @@ export async function readErrorDetail(response: Response): Promise<string> {
   }
 
   return `Request failed with status ${response.status}`;
+}
+
+export function extractToken(payload: TokenResponse): string | null {
+  if (typeof payload.access_token === "string" && payload.access_token.length > 0) {
+    return payload.access_token;
+  }
+  if (typeof payload.token === "string" && payload.token.length > 0) {
+    return payload.token;
+  }
+  return null;
 }

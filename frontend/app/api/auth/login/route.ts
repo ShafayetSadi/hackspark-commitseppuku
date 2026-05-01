@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import {
   AUTH_TOKEN_COOKIE,
   authCookieOptions,
+  extractToken,
   getGatewayUrl,
   readErrorDetail,
   TokenResponse,
@@ -40,11 +41,18 @@ export async function POST(request: NextRequest) {
   }
 
   const tokenPayload = (await upstreamResponse.json()) as TokenResponse;
+  const token = extractToken(tokenPayload);
+  if (!token) {
+    return NextResponse.json(
+      { detail: "Login succeeded but no JWT token was returned." },
+      { status: 502 },
+    );
+  }
   const response = NextResponse.json({ success: true });
 
   response.cookies.set(
     AUTH_TOKEN_COOKIE,
-    tokenPayload.access_token,
+    token,
     authCookieOptions(),
   );
 
