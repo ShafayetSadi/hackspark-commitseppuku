@@ -18,6 +18,7 @@ AGENTIC_PB2 = cast(Any, agentic_pb2)
 ANALYTICS_PB2 = cast(Any, analytics_pb2)
 RENTAL_PB2 = cast(Any, rental_pb2)
 USER_PB2 = cast(Any, user_pb2)
+ANALYTICS_RECOMMENDATIONS_GRPC_TIMEOUT_SECONDS = 30.0
 
 
 def _parse_query_int(value: str, *, field_name: str) -> int:
@@ -365,6 +366,7 @@ async def get_surge(
 @router.get("/analytics/recommendations")
 async def get_recommendations(
     category: str = Query(default=""),
+    date: str = Query(default=""),
     limit: int = Query(default=5),
     settings: GatewaySettings = Depends(get_settings),
 ):
@@ -374,7 +376,9 @@ async def get_recommendations(
             ANALYTICS_PB2.RecommendationsRequest(
                 category=category,
                 limit=_parse_query_int(str(limit), field_name="limit"),
-            )
+                date=date,
+            ),
+            timeout=ANALYTICS_RECOMMENDATIONS_GRPC_TIMEOUT_SECONDS,
         )
         return JSONResponse(content=json.loads(resp.json_data))
     except grpc.RpcError as exc:
@@ -392,6 +396,17 @@ async def get_peak_window(
         resp = await stub.GetPeakWindow(
             ANALYTICS_PB2.PeakWindowRequest(from_month=from_month, to_month=to_month)
         )
+        return JSONResponse(content=json.loads(resp.json_data))
+    except grpc.RpcError as exc:
+        raise grpc_to_http_exception(exc) from exc
+
+
+@router.get("/analytics/surge-days")
+async def get_surge_days(request: Request, settings: GatewaySettings = Depends(get_settings)):
+    month = request.query_params.get("month", "")
+    stub = analytics_client.get_stub(settings.analytics_service_addr)
+    try:
+        resp = await stub.GetSurgeDays(ANALYTICS_PB2.SurgeDaysRequest(month=month))
         return JSONResponse(content=json.loads(resp.json_data))
     except grpc.RpcError as exc:
         raise grpc_to_http_exception(exc) from exc

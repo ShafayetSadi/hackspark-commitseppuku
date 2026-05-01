@@ -23,17 +23,17 @@ const SECONDARY_NAV: NavItem[] = [
 type SidebarProps = {
   page: PageId;
   setPage: (page: PageId) => void;
-  userInitials?: string;
-  userName?: string;
-  userEmail?: string;
+  userInitials: string;
+  userName: string;
+  userEmail: string;
 };
 
 export function Sidebar({
   page,
   setPage,
-  userInitials = "AR",
-  userName = "Ayesha R.",
-  userEmail = "ayesha@rentpi.app",
+  userInitials,
+  userName,
+  userEmail,
 }: SidebarProps) {
   return (
     <aside className="sidebar">
@@ -87,10 +87,10 @@ export function Sidebar({
 
 type TopbarProps = {
   onSearch?: (value: string) => void;
-  userInitials?: string;
+  userInitials: string;
 };
 
-export function Topbar({ onSearch, userInitials = "AR" }: TopbarProps) {
+export function Topbar({ onSearch, userInitials }: TopbarProps) {
   return (
     <div className="topbar">
       <div className="search-input">

@@ -1,5 +1,6 @@
 import { cookies } from "next/headers";
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 
 import { AUTH_TOKEN_COOKIE, getGatewayUrl } from "@/lib/auth-service";
 
@@ -61,5 +62,8 @@ async function getInitialUser(): Promise<AppUser | null> {
 
 export default async function RentPiAppPage() {
   const initialUser = await getInitialUser();
+  if (!initialUser) {
+    redirect("/login");
+  }
   return <AppShell initialUser={initialUser} />;
 }

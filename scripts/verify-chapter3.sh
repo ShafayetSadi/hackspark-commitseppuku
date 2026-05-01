@@ -138,6 +138,25 @@ if not isinstance(node, list) or len(node) != expected:
 PY
 }
 
+json_array_length_at_most() {
+  python3 - "$1" "$2" "$3" <<'PY'
+import json
+import sys
+
+path = sys.argv[2].split(".")
+expected = int(sys.argv[3])
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+node = data
+for part in path:
+    if not isinstance(node, dict) or part not in node:
+        raise SystemExit(1)
+    node = node[part]
+if not isinstance(node, list) or len(node) > expected:
+    raise SystemExit(1)
+PY
+}
+
 json_feed_items_valid() {
   python3 - "$1" <<'PY'
 import json
@@ -152,6 +171,25 @@ for item in feed:
     if not isinstance(item, dict):
         raise SystemExit(1)
     for key in ("rentalId", "productId", "rentalStart", "rentalEnd"):
+        if key not in item:
+            raise SystemExit(1)
+PY
+}
+
+json_recommendations_valid() {
+  python3 - "$1" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], "r", encoding="utf-8") as fh:
+    data = json.load(fh)
+recommendations = data.get("recommendations")
+if not isinstance(recommendations, list):
+    raise SystemExit(1)
+for item in recommendations:
+    if not isinstance(item, dict):
+        raise SystemExit(1)
+    for key in ("productId", "name", "category", "score"):
         if key not in item:
             raise SystemExit(1)
 PY
@@ -394,6 +432,117 @@ else
   fail "P12 invalid-limit probe is unreachable"
 fi
 
+section "P13 Surge Days"
+p13_headers="$TMP_DIR/p13.headers"
+p13_body="$TMP_DIR/p13.json"
+if [ -n "${AUTH_HEADER:-}" ] && http_request GET \
+  "$BASE_URL/analytics/surge-days?month=2024-03" \
+  "" "$p13_headers" "$p13_body" "$AUTH_HEADER"; then
+  p13_status=$(http_status "$p13_headers")
+  if [ "$p13_status" = "200" ]; then
+    pass "P13 surge-days route returns HTTP 200"
+  else
+    fail "P13 surge-days route returned HTTP $p13_status"
+  fi
+
+  for key in month data; do
+    if json_has_key "$p13_body" "$key"; then
+      pass "P13 response includes $key"
+    else
+      fail "P13 response missing $key"
+    fi
+  done
+
+  if json_array_length_equals "$p13_body" "data" "31"; then
+    pass "P13 response fills the whole month day-by-day"
+  else
+    fail "P13 response did not include every day of the month"
+  fi
+else
+  fail "P13 surge-days route is unreachable"
+fi
+
+p13_invalid_headers="$TMP_DIR/p13-invalid.headers"
+p13_invalid_body="$TMP_DIR/p13-invalid.json"
+if [ -n "${AUTH_HEADER:-}" ] && http_request GET \
+  "$BASE_URL/analytics/surge-days?month=2024-3" \
+  "" "$p13_invalid_headers" "$p13_invalid_body" "$AUTH_HEADER"; then
+  p13_invalid_status=$(http_status "$p13_invalid_headers")
+  if [ "$p13_invalid_status" = "400" ]; then
+    pass "P13 invalid month format returns 400"
+  else
+    fail "P13 invalid month format returned HTTP $p13_invalid_status instead of 400"
+  fi
+else
+  fail "P13 invalid-month probe is unreachable"
+fi
+
+section "P14 What's In Season"
+p14_headers="$TMP_DIR/p14.headers"
+p14_body="$TMP_DIR/p14.json"
+if [ -n "${AUTH_HEADER:-}" ] && http_request GET \
+  "$BASE_URL/analytics/recommendations?date=2024-06-15&limit=5" \
+  "" "$p14_headers" "$p14_body" "$AUTH_HEADER"; then
+  p14_status=$(http_status "$p14_headers")
+  if [ "$p14_status" = "200" ]; then
+    pass "P14 recommendations route returns HTTP 200"
+  else
+    fail "P14 recommendations route returned HTTP $p14_status"
+  fi
+
+  for key in date recommendations; do
+    if json_has_key "$p14_body" "$key"; then
+      pass "P14 response includes $key"
+    else
+      fail "P14 response missing $key"
+    fi
+  done
+
+  if json_recommendations_valid "$p14_body"; then
+    pass "P14 recommendations keep the expected enriched product fields"
+  else
+    fail "P14 recommendations are missing expected fields"
+  fi
+
+  if json_array_length_at_most "$p14_body" "recommendations" "5"; then
+    pass "P14 respects the requested limit"
+  else
+    fail "P14 returned more recommendations than requested"
+  fi
+else
+  fail "P14 recommendations route is unreachable"
+fi
+
+p14_invalid_date_headers="$TMP_DIR/p14-invalid-date.headers"
+p14_invalid_date_body="$TMP_DIR/p14-invalid-date.json"
+if [ -n "${AUTH_HEADER:-}" ] && http_request GET \
+  "$BASE_URL/analytics/recommendations?date=2024-6-15&limit=5" \
+  "" "$p14_invalid_date_headers" "$p14_invalid_date_body" "$AUTH_HEADER"; then
+  p14_invalid_date_status=$(http_status "$p14_invalid_date_headers")
+  if [ "$p14_invalid_date_status" = "400" ]; then
+    pass "P14 invalid date format returns 400"
+  else
+    fail "P14 invalid date format returned HTTP $p14_invalid_date_status instead of 400"
+  fi
+else
+  fail "P14 invalid-date probe is unreachable"
+fi
+
+p14_invalid_limit_headers="$TMP_DIR/p14-invalid-limit.headers"
+p14_invalid_limit_body="$TMP_DIR/p14-invalid-limit.json"
+if [ -n "${AUTH_HEADER:-}" ] && http_request GET \
+  "$BASE_URL/analytics/recommendations?date=2024-06-15&limit=0" \
+  "" "$p14_invalid_limit_headers" "$p14_invalid_limit_body" "$AUTH_HEADER"; then
+  p14_invalid_limit_status=$(http_status "$p14_invalid_limit_headers")
+  if [ "$p14_invalid_limit_status" = "400" ]; then
+    pass "P14 invalid limit returns 400"
+  else
+    fail "P14 invalid limit returned HTTP $p14_invalid_limit_status instead of 400"
+  fi
+else
+  fail "P14 invalid-limit probe is unreachable"
+fi
+
 section "Source Checks"
 if grep -q "WINDOW_DAYS = 7" analytics-service/analytics_service/services/analytics.py \
   && grep -q "running_total" analytics-service/analytics_service/services/analytics.py \
@@ -412,9 +561,24 @@ else
   fail "P12 merged-feed implementation is missing expected merge markers"
 fi
 
+if grep -q "compute_surge_days" analytics-service/analytics_service/services/analytics.py \
+  && grep -q "waiting_days" analytics-service/analytics_service/services/analytics.py \
+  && grep -q "while waiting_days" analytics-service/analytics_service/services/analytics.py; then
+  pass "P13 surge-days implementation shows a single-pass waiting-stack approach"
+else
+  fail "P13 surge-days implementation is missing expected single-pass markers"
+fi
+
+if grep -q "PAST_SEASONAL_YEARS = 2" analytics-service/analytics_service/services/analytics.py \
+  && grep -q "/api/data/rentals" analytics-service/analytics_service/services/analytics.py \
+  && grep -q "/api/data/products/batch" analytics-service/analytics_service/services/analytics.py; then
+  pass "P14 recommendations implementation uses the two-year seasonal rental window plus batched product enrichment"
+else
+  fail "P14 recommendations implementation is missing expected seasonal-window markers"
+fi
+
 section "Summary"
 printf 'PASS=%s FAIL=%s WARN=%s\n' "$PASS_COUNT" "$FAIL_COUNT" "$WARN_COUNT"
 if [ "$FAIL_COUNT" -gt 0 ]; then
   exit 1
 fi
-

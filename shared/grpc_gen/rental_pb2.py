@@ -4,70 +4,73 @@
 # source: rental.proto
 # Protobuf Python Version: 5.28.1
 """Generated protocol buffer code."""
-
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC, 5, 28, 1, "", "rental.proto"
+    _runtime_version.Domain.PUBLIC,
+    5,
+    28,
+    1,
+    '',
+    'rental.proto'
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x0crental.proto\x12\x06rental"\xb0\x01\n\rProductsQuery\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x0c\n\x04page\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\t\x12<\n\x0c\x65xtra_params\x18\x04 \x03(\x0b\x32&.rental.ProductsQuery.ExtraParamsEntry\x1a\x32\n\x10\x45xtraParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01"\'\n\x11GetProductRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05"%\n\x10ProductsResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t"$\n\x0fProductResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t"M\n\x13\x41vailabilityRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x11\n\tfrom_date\x18\x02 \x01(\t\x12\x0f\n\x07to_date\x18\x03 \x01(\t"\'\n\tDateRange\x12\r\n\x05start\x18\x01 \x01(\t\x12\x0b\n\x03\x65nd\x18\x02 \x01(\t"\xb3\x01\n\x14\x41vailabilityResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x11\n\tfrom_date\x18\x02 \x01(\t\x12\x0f\n\x07to_date\x18\x03 \x01(\t\x12\x11\n\tavailable\x18\x04 \x01(\x08\x12\'\n\x0c\x62usy_periods\x18\x05 \x03(\x0b\x32\x11.rental.DateRange\x12\'\n\x0c\x66ree_windows\x18\x06 \x03(\x0b\x32\x11.rental.DateRange"H\n\x15KthBusiestDateRequest\x12\x12\n\nfrom_month\x18\x01 \x01(\t\x12\x10\n\x08to_month\x18\x02 \x01(\t\x12\t\n\x01k\x18\x03 \x01(\x05"m\n\x16KthBusiestDateResponse\x12\x12\n\nfrom_month\x18\x01 \x01(\t\x12\x10\n\x08to_month\x18\x02 \x01(\t\x12\t\n\x01k\x18\x03 \x01(\x05\x12\x0c\n\x04\x64\x61te\x18\x04 \x01(\t\x12\x14\n\x0crental_count\x18\x05 \x01(\x05"6\n\x18UserTopCategoriesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12\t\n\x01k\x18\x02 \x01(\x05"7\n\rCategoryCount\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x14\n\x0crental_count\x18\x02 \x01(\x05"[\n\x19UserTopCategoriesResponse\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12-\n\x0etop_categories\x18\x02 \x03(\x0b\x32\x15.rental.CategoryCount"<\n\x18LongestFreeStreakRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x0c\n\x04year\x18\x02 \x01(\x05">\n\nFreeStreak\x12\x11\n\tfrom_date\x18\x01 \x01(\t\x12\x0f\n\x07to_date\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x61ys\x18\x03 \x01(\x05"n\n\x19LongestFreeStreakResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x0c\n\x04year\x18\x02 \x01(\x05\x12/\n\x13longest_free_streak\x18\x03 \x01(\x0b\x32\x12.rental.FreeStreak"7\n\x11MergedFeedRequest\x12\x13\n\x0bproduct_ids\x18\x01 \x03(\x05\x12\r\n\x05limit\x18\x02 \x01(\x05"]\n\nFeedRental\x12\x11\n\trental_id\x18\x01 \x01(\x05\x12\x12\n\nproduct_id\x18\x02 \x01(\x05\x12\x14\n\x0crental_start\x18\x03 \x01(\t\x12\x12\n\nrental_end\x18\x04 \x01(\t"Z\n\x12MergedFeedResponse\x12\x13\n\x0bproduct_ids\x18\x01 \x03(\x05\x12\r\n\x05limit\x18\x02 \x01(\x05\x12 \n\x04\x66\x65\x65\x64\x18\x03 \x03(\x0b\x32\x12.rental.FeedRental2\xb6\x04\n\rRentalService\x12?\n\x0cListProducts\x12\x15.rental.ProductsQuery\x1a\x18.rental.ProductsResponse\x12@\n\nGetProduct\x12\x19.rental.GetProductRequest\x1a\x17.rental.ProductResponse\x12L\n\x0fGetAvailability\x12\x1b.rental.AvailabilityRequest\x1a\x1c.rental.AvailabilityResponse\x12R\n\x11GetKthBusiestDate\x12\x1d.rental.KthBusiestDateRequest\x1a\x1e.rental.KthBusiestDateResponse\x12[\n\x14GetUserTopCategories\x12 .rental.UserTopCategoriesRequest\x1a!.rental.UserTopCategoriesResponse\x12[\n\x14GetLongestFreeStreak\x12 .rental.LongestFreeStreakRequest\x1a!.rental.LongestFreeStreakResponse\x12\x46\n\rGetMergedFeed\x12\x19.rental.MergedFeedRequest\x1a\x1a.rental.MergedFeedResponseb\x06proto3'
-)
+
+
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0crental.proto\x12\x06rental\"\xb0\x01\n\rProductsQuery\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x0c\n\x04page\x18\x02 \x01(\t\x12\r\n\x05limit\x18\x03 \x01(\t\x12<\n\x0c\x65xtra_params\x18\x04 \x03(\x0b\x32&.rental.ProductsQuery.ExtraParamsEntry\x1a\x32\n\x10\x45xtraParamsEntry\x12\x0b\n\x03key\x18\x01 \x01(\t\x12\r\n\x05value\x18\x02 \x01(\t:\x02\x38\x01\"\'\n\x11GetProductRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\"%\n\x10ProductsResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t\"$\n\x0fProductResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t\"M\n\x13\x41vailabilityRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x11\n\tfrom_date\x18\x02 \x01(\t\x12\x0f\n\x07to_date\x18\x03 \x01(\t\"\'\n\tDateRange\x12\r\n\x05start\x18\x01 \x01(\t\x12\x0b\n\x03\x65nd\x18\x02 \x01(\t\"\xb3\x01\n\x14\x41vailabilityResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x11\n\tfrom_date\x18\x02 \x01(\t\x12\x0f\n\x07to_date\x18\x03 \x01(\t\x12\x11\n\tavailable\x18\x04 \x01(\x08\x12\'\n\x0c\x62usy_periods\x18\x05 \x03(\x0b\x32\x11.rental.DateRange\x12\'\n\x0c\x66ree_windows\x18\x06 \x03(\x0b\x32\x11.rental.DateRange\"H\n\x15KthBusiestDateRequest\x12\x12\n\nfrom_month\x18\x01 \x01(\t\x12\x10\n\x08to_month\x18\x02 \x01(\t\x12\t\n\x01k\x18\x03 \x01(\x05\"m\n\x16KthBusiestDateResponse\x12\x12\n\nfrom_month\x18\x01 \x01(\t\x12\x10\n\x08to_month\x18\x02 \x01(\t\x12\t\n\x01k\x18\x03 \x01(\x05\x12\x0c\n\x04\x64\x61te\x18\x04 \x01(\t\x12\x14\n\x0crental_count\x18\x05 \x01(\x05\"6\n\x18UserTopCategoriesRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12\t\n\x01k\x18\x02 \x01(\x05\"7\n\rCategoryCount\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\x14\n\x0crental_count\x18\x02 \x01(\x05\"[\n\x19UserTopCategoriesResponse\x12\x0f\n\x07user_id\x18\x01 \x01(\x05\x12-\n\x0etop_categories\x18\x02 \x03(\x0b\x32\x15.rental.CategoryCount\"<\n\x18LongestFreeStreakRequest\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x0c\n\x04year\x18\x02 \x01(\x05\">\n\nFreeStreak\x12\x11\n\tfrom_date\x18\x01 \x01(\t\x12\x0f\n\x07to_date\x18\x02 \x01(\t\x12\x0c\n\x04\x64\x61ys\x18\x03 \x01(\x05\"n\n\x19LongestFreeStreakResponse\x12\x12\n\nproduct_id\x18\x01 \x01(\x05\x12\x0c\n\x04year\x18\x02 \x01(\x05\x12/\n\x13longest_free_streak\x18\x03 \x01(\x0b\x32\x12.rental.FreeStreak\"7\n\x11MergedFeedRequest\x12\x13\n\x0bproduct_ids\x18\x01 \x03(\x05\x12\r\n\x05limit\x18\x02 \x01(\x05\"]\n\nFeedRental\x12\x11\n\trental_id\x18\x01 \x01(\x05\x12\x12\n\nproduct_id\x18\x02 \x01(\x05\x12\x14\n\x0crental_start\x18\x03 \x01(\t\x12\x12\n\nrental_end\x18\x04 \x01(\t\"Z\n\x12MergedFeedResponse\x12\x13\n\x0bproduct_ids\x18\x01 \x03(\x05\x12\r\n\x05limit\x18\x02 \x01(\x05\x12 \n\x04\x66\x65\x65\x64\x18\x03 \x03(\x0b\x32\x12.rental.FeedRental2\xb6\x04\n\rRentalService\x12?\n\x0cListProducts\x12\x15.rental.ProductsQuery\x1a\x18.rental.ProductsResponse\x12@\n\nGetProduct\x12\x19.rental.GetProductRequest\x1a\x17.rental.ProductResponse\x12L\n\x0fGetAvailability\x12\x1b.rental.AvailabilityRequest\x1a\x1c.rental.AvailabilityResponse\x12R\n\x11GetKthBusiestDate\x12\x1d.rental.KthBusiestDateRequest\x1a\x1e.rental.KthBusiestDateResponse\x12[\n\x14GetUserTopCategories\x12 .rental.UserTopCategoriesRequest\x1a!.rental.UserTopCategoriesResponse\x12[\n\x14GetLongestFreeStreak\x12 .rental.LongestFreeStreakRequest\x1a!.rental.LongestFreeStreakResponse\x12\x46\n\rGetMergedFeed\x12\x19.rental.MergedFeedRequest\x1a\x1a.rental.MergedFeedResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "rental_pb2", _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'rental_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    DESCRIPTOR._loaded_options = None
-    _globals["_PRODUCTSQUERY_EXTRAPARAMSENTRY"]._loaded_options = None
-    _globals["_PRODUCTSQUERY_EXTRAPARAMSENTRY"]._serialized_options = b"8\001"
-    _globals["_PRODUCTSQUERY"]._serialized_start = 25
-    _globals["_PRODUCTSQUERY"]._serialized_end = 201
-    _globals["_PRODUCTSQUERY_EXTRAPARAMSENTRY"]._serialized_start = 151
-    _globals["_PRODUCTSQUERY_EXTRAPARAMSENTRY"]._serialized_end = 201
-    _globals["_GETPRODUCTREQUEST"]._serialized_start = 203
-    _globals["_GETPRODUCTREQUEST"]._serialized_end = 242
-    _globals["_PRODUCTSRESPONSE"]._serialized_start = 244
-    _globals["_PRODUCTSRESPONSE"]._serialized_end = 281
-    _globals["_PRODUCTRESPONSE"]._serialized_start = 283
-    _globals["_PRODUCTRESPONSE"]._serialized_end = 319
-    _globals["_AVAILABILITYREQUEST"]._serialized_start = 321
-    _globals["_AVAILABILITYREQUEST"]._serialized_end = 398
-    _globals["_DATERANGE"]._serialized_start = 400
-    _globals["_DATERANGE"]._serialized_end = 439
-    _globals["_AVAILABILITYRESPONSE"]._serialized_start = 442
-    _globals["_AVAILABILITYRESPONSE"]._serialized_end = 621
-    _globals["_KTHBUSIESTDATEREQUEST"]._serialized_start = 623
-    _globals["_KTHBUSIESTDATEREQUEST"]._serialized_end = 695
-    _globals["_KTHBUSIESTDATERESPONSE"]._serialized_start = 697
-    _globals["_KTHBUSIESTDATERESPONSE"]._serialized_end = 806
-    _globals["_USERTOPCATEGORIESREQUEST"]._serialized_start = 808
-    _globals["_USERTOPCATEGORIESREQUEST"]._serialized_end = 862
-    _globals["_CATEGORYCOUNT"]._serialized_start = 864
-    _globals["_CATEGORYCOUNT"]._serialized_end = 919
-    _globals["_USERTOPCATEGORIESRESPONSE"]._serialized_start = 921
-    _globals["_USERTOPCATEGORIESRESPONSE"]._serialized_end = 1012
-    _globals["_LONGESTFREESTREAKREQUEST"]._serialized_start = 1014
-    _globals["_LONGESTFREESTREAKREQUEST"]._serialized_end = 1074
-    _globals["_FREESTREAK"]._serialized_start = 1076
-    _globals["_FREESTREAK"]._serialized_end = 1138
-    _globals["_LONGESTFREESTREAKRESPONSE"]._serialized_start = 1140
-    _globals["_LONGESTFREESTREAKRESPONSE"]._serialized_end = 1250
-    _globals["_MERGEDFEEDREQUEST"]._serialized_start = 1252
-    _globals["_MERGEDFEEDREQUEST"]._serialized_end = 1307
-    _globals["_FEEDRENTAL"]._serialized_start = 1309
-    _globals["_FEEDRENTAL"]._serialized_end = 1402
-    _globals["_MERGEDFEEDRESPONSE"]._serialized_start = 1404
-    _globals["_MERGEDFEEDRESPONSE"]._serialized_end = 1494
-    _globals["_RENTALSERVICE"]._serialized_start = 1497
-    _globals["_RENTALSERVICE"]._serialized_end = 2063
+  DESCRIPTOR._loaded_options = None
+  _globals['_PRODUCTSQUERY_EXTRAPARAMSENTRY']._loaded_options = None
+  _globals['_PRODUCTSQUERY_EXTRAPARAMSENTRY']._serialized_options = b'8\001'
+  _globals['_PRODUCTSQUERY']._serialized_start=25
+  _globals['_PRODUCTSQUERY']._serialized_end=201
+  _globals['_PRODUCTSQUERY_EXTRAPARAMSENTRY']._serialized_start=151
+  _globals['_PRODUCTSQUERY_EXTRAPARAMSENTRY']._serialized_end=201
+  _globals['_GETPRODUCTREQUEST']._serialized_start=203
+  _globals['_GETPRODUCTREQUEST']._serialized_end=242
+  _globals['_PRODUCTSRESPONSE']._serialized_start=244
+  _globals['_PRODUCTSRESPONSE']._serialized_end=281
+  _globals['_PRODUCTRESPONSE']._serialized_start=283
+  _globals['_PRODUCTRESPONSE']._serialized_end=319
+  _globals['_AVAILABILITYREQUEST']._serialized_start=321
+  _globals['_AVAILABILITYREQUEST']._serialized_end=398
+  _globals['_DATERANGE']._serialized_start=400
+  _globals['_DATERANGE']._serialized_end=439
+  _globals['_AVAILABILITYRESPONSE']._serialized_start=442
+  _globals['_AVAILABILITYRESPONSE']._serialized_end=621
+  _globals['_KTHBUSIESTDATEREQUEST']._serialized_start=623
+  _globals['_KTHBUSIESTDATEREQUEST']._serialized_end=695
+  _globals['_KTHBUSIESTDATERESPONSE']._serialized_start=697
+  _globals['_KTHBUSIESTDATERESPONSE']._serialized_end=806
+  _globals['_USERTOPCATEGORIESREQUEST']._serialized_start=808
+  _globals['_USERTOPCATEGORIESREQUEST']._serialized_end=862
+  _globals['_CATEGORYCOUNT']._serialized_start=864
+  _globals['_CATEGORYCOUNT']._serialized_end=919
+  _globals['_USERTOPCATEGORIESRESPONSE']._serialized_start=921
+  _globals['_USERTOPCATEGORIESRESPONSE']._serialized_end=1012
+  _globals['_LONGESTFREESTREAKREQUEST']._serialized_start=1014
+  _globals['_LONGESTFREESTREAKREQUEST']._serialized_end=1074
+  _globals['_FREESTREAK']._serialized_start=1076
+  _globals['_FREESTREAK']._serialized_end=1138
+  _globals['_LONGESTFREESTREAKRESPONSE']._serialized_start=1140
+  _globals['_LONGESTFREESTREAKRESPONSE']._serialized_end=1250
+  _globals['_MERGEDFEEDREQUEST']._serialized_start=1252
+  _globals['_MERGEDFEEDREQUEST']._serialized_end=1307
+  _globals['_FEEDRENTAL']._serialized_start=1309
+  _globals['_FEEDRENTAL']._serialized_end=1402
+  _globals['_MERGEDFEEDRESPONSE']._serialized_start=1404
+  _globals['_MERGEDFEEDRESPONSE']._serialized_end=1494
+  _globals['_RENTALSERVICE']._serialized_start=1497
+  _globals['_RENTALSERVICE']._serialized_end=2063
 # @@protoc_insertion_point(module_scope)

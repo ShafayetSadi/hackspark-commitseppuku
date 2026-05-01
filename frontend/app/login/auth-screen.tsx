@@ -746,7 +746,7 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                   </div>
 
                   {mode === "login" ? (
-                    <form onSubmit={handleLogin} noValidate>
+                    <form onSubmit={handleLogin} noValidate autoComplete="on">
                       <h2 className="auth-form-title">Welcome back</h2>
                       <p className="auth-form-sub">
                         Sign in to continue browsing rentals and saved trips.
@@ -766,10 +766,14 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                             </span>
                             <input
                               id="loginEmail"
+                              name="username"
                               className={`input ${loginEmailError ? "invalid" : ""}`}
                               type="email"
                               placeholder="you@example.com"
-                              autoComplete="email"
+                              autoComplete="section-login username"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
                               value={loginEmail}
                               onChange={(e) => {
                                 setLoginEmail(e.target.value);
@@ -806,10 +810,11 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                             </span>
                             <input
                               id="loginPassword"
+                              name="password"
                               className={`input ${loginPasswordError ? "invalid" : ""}`}
                               type={showLoginPassword ? "text" : "password"}
                               placeholder="••••••••"
-                              autoComplete="current-password"
+                              autoComplete="section-login current-password"
                               value={loginPassword}
                               onChange={(e) => {
                                 setLoginPassword(e.target.value);
@@ -868,7 +873,7 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                       </div>
                     </form>
                   ) : (
-                    <form onSubmit={handleRegister} noValidate>
+                    <form onSubmit={handleRegister} noValidate autoComplete="off">
                       <h2 className="auth-form-title">Create your account</h2>
                       <p className="auth-form-sub">
                         Browse products, check availability, and save your
@@ -883,6 +888,7 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                             </label>
                             <input
                               id="regFirst"
+                              name="givenName"
                               className="input"
                               placeholder="Ayesha"
                               autoComplete="given-name"
@@ -896,6 +902,7 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                             </label>
                             <input
                               id="regLast"
+                              name="familyName"
                               className="input"
                               placeholder="Rahman"
                               autoComplete="family-name"
@@ -915,10 +922,14 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                             </span>
                             <input
                               id="regEmail"
+                              name="email"
                               className={`input ${regEmailError ? "invalid" : ""}`}
                               type="email"
                               placeholder="you@example.com"
-                              autoComplete="email"
+                              autoComplete="section-register email"
+                              autoCapitalize="none"
+                              autoCorrect="off"
+                              spellCheck={false}
                               value={regEmail}
                               onChange={(e) => {
                                 setRegEmail(e.target.value);
@@ -941,10 +952,11 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                             </span>
                             <input
                               id="regPassword"
+                              name="password"
                               className={`input ${regPasswordError ? "invalid" : ""}`}
                               type={showRegPassword ? "text" : "password"}
                               placeholder="At least 8 characters"
-                              autoComplete="new-password"
+                              autoComplete="section-register new-password"
                               value={regPassword}
                               onChange={(e) => {
                                 setRegPassword(e.target.value);
@@ -992,10 +1004,11 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
                             </span>
                             <input
                               id="regConfirm"
+                              name="confirmPassword"
                               className={`input ${regConfirmError ? "invalid" : ""}`}
                               type="password"
                               placeholder="Re-type password"
-                              autoComplete="new-password"
+                              autoComplete="section-register new-password"
                               value={regConfirm}
                               onChange={(e) => {
                                 setRegConfirm(e.target.value);
