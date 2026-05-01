@@ -1,130 +1,101 @@
 # API Documentation
 
-This document describes the HTTP contracts implemented by the current scaffold.
-
-## Base URL
-
-When running locally through Docker:
-
-```text
-http://localhost:8000
-```
-
-The public client should usually call the API Gateway, not the individual services directly.
+HTTP contracts exposed by the API gateway. All requests go to `http://localhost:8000` when running locally.
 
 ## Authentication Model
 
-- Public routes:
-  - `GET /health`
-  - `POST /auth/register`
-  - `POST /users/login`
-- Protected routes:
-  - `GET /auth/me`
-  - `GET /items`
-  - `POST /items`
-  - `POST /ai/chat`
+**Public (no JWT required):**
+- `GET /health`
+- `GET /status`
+- `GET /user-service/status`
+- `GET /rental-service/status`
+- `GET /analytics-service/status`
+- `GET /agentic-service/status`
+- `POST /users/register`
+- `POST /users/login`
+- `GET /docs`, `GET /redoc`, `GET /openapi.json`
+- `GET /metrics`
 
-Protected requests must include:
-
+**Protected** — all other routes require:
 ```text
 Authorization: Bearer <access_token>
 ```
 
 ## Error Response Format
 
-All error responses follow one of two shapes depending on the source of the error.
-
-**Application errors** (auth failures, conflicts, upstream issues) return a single string detail:
-
+**Application errors:**
 ```json
 { "detail": "Invalid credentials" }
 ```
 
-**Validation errors** (`422 Unprocessable Entity`) from malformed request bodies or invalid query parameters return a list:
-
+**Validation errors (422):**
 ```json
 {
   "detail": [
-    {
-      "loc": ["body", "email"],
-      "msg": "value is not a valid email address",
-      "type": "value_error.email"
-    }
+    { "loc": ["body", "email"], "msg": "value is not a valid email address", "type": "value_error.email" }
   ]
 }
 ```
 
-Common status codes across all services:
+**Common status codes:**
 
 | Code | Meaning |
-| ---- | ------- |
-| `400` | Bad request (malformed input not caught by schema) |
+|------|---------|
+| `400` | Bad request — malformed input |
 | `401` | Missing, expired, or invalid bearer token; wrong credentials |
+| `404` | Resource not found |
 | `409` | Conflict — resource already exists (e.g. duplicate email) |
-| `422` | Validation failure — request body or query params failed schema check |
-| `502` | Gateway could not reach an upstream service |
-| `504` | Upstream service timed out |
+| `422` | Schema validation failure |
+| `502` | Gateway could not reach an upstream service (gRPC `UNAVAILABLE`) |
+| `503` | Central API rate limit exceeded after retries |
+| `504` | Upstream service timed out (gRPC `DEADLINE_EXCEEDED`) |
 
-## Gateway Routes
+---
 
-### Health
+## Health & Status
 
-`GET /health`
+### GET /health
 
-Response:
+```json
+{ "status": "ok", "service": "api-gateway" }
+```
+
+### GET /status
+
+Aggregates gRPC health checks from all downstream services in parallel.
 
 ```json
 {
-  "status": "ok",
-  "service": "api-gateway"
+  "gateway": "ok",
+  "user-service": "ok",
+  "rental-service": "ok",
+  "analytics-service": "ok",
+  "agentic-service": "ok"
 }
 ```
 
-### Auth Proxy
+### GET /{service}/status
 
-- `POST /auth/register`
-- `POST /users/login`
-- `GET /auth/me`
+Returns the raw `/status` response from an individual service.
 
-### Item Proxy
+---
 
-- `GET /items`
-- `POST /items`
+## User Service
 
-### AI Proxy
-
-- `POST /ai/chat`
-
-## Gateway Failure Semantics
-
-The gateway normalizes some upstream failures:
-
-- `401` with `{"detail":"Missing bearer token"}` when a protected route is called without a bearer token
-- `401` with `{"detail":"Invalid token"}` when JWT validation fails at the gateway
-- `504` with `{"detail":"Upstream service timeout"}` when an upstream service does not respond within the configured proxy timeout
-- `502` with `{"detail":"Upstream service unavailable"}` when an upstream service cannot be reached
-- `502` with `{"detail":"Upstream service error"}` when an upstream service returns a `5xx` response
-
-## Auth Service
-
-Gateway path prefix: `/auth`
-
-### POST /auth/register
+### POST /users/register
 
 Creates a user and returns a bearer token.
 
 Request:
-
 ```json
 {
   "email": "team@example.com",
   "password": "password123",
-  "full_name": "Hack Team"
+  "name": "Hack Team"
 }
 ```
 
 Response `201`:
-
 ```json
 {
   "access_token": "<jwt>",
@@ -132,17 +103,11 @@ Response `201`:
 }
 ```
 
-Possible errors:
-
-- `409` if the email already exists
-- `422` if validation fails
+Errors: `409` (email already exists), `422` (validation failure).
 
 ### POST /users/login
 
-Authenticates a user and returns a bearer token.
-
 Request:
-
 ```json
 {
   "email": "team@example.com",
@@ -151,7 +116,6 @@ Request:
 ```
 
 Response `200`:
-
 ```json
 {
   "access_token": "<jwt>",
@@ -159,157 +123,286 @@ Response `200`:
 }
 ```
 
-Possible errors:
+Errors: `401` (invalid credentials), `422`.
 
-- `401` if credentials are invalid
-- `422` if validation fails
-
-### GET /auth/me
+### GET /users/me
 
 Returns the currently authenticated user.
 
-Headers:
-
-```text
-Authorization: Bearer <jwt>
-```
-
 Response `200`:
-
 ```json
 {
-  "id": 1,
+  "id": "uuid",
   "email": "team@example.com",
   "full_name": "Hack Team"
 }
 ```
 
-Possible errors:
+Errors: `401`.
 
-- `401` if the token is missing, invalid, or references a deleted user
+### GET /users/{user_id}/discount
 
-## Item Service
-
-Gateway path prefix: `/items`
-
-### GET /items
-
-Returns a paginated list of items.
-
-Query parameters:
-
-- `page`: integer, default `1`
-- `page_size`: integer, default `20`, max `100`
-- `category`: optional string filter
-- `search`: optional name search
-
-Example:
-
-```text
-GET /items?page=1&page_size=20&category=rental&search=cam
-```
+Returns the discount percentage for a user based on their security score.
 
 Response `200`:
-
 ```json
 {
-  "items": [
-    {
-      "id": 1,
-      "name": "Camera",
-      "category": "rental",
-      "quantity": 3,
-      "created_at": "2026-04-28T00:00:00Z"
-    }
+  "user_id": "uuid",
+  "security_score": 85,
+  "discount_percent": 10
+}
+```
+
+Errors: `401`, `404`.
+
+---
+
+## Rental Service
+
+All rental endpoints require `Authorization: Bearer <token>`.
+
+### GET /rentals/products
+
+Query parameters:
+- `category`: optional string filter
+- `page`: integer, default `1`
+- `page_size`: integer, default `20`
+
+Response `200`:
+```json
+{
+  "products": [
+    { "id": "...", "name": "Power Drill", "category": "TOOLS", "price_per_day": 25.0 }
   ],
-  "page": 1,
-  "page_size": 20,
   "total": 1
 }
 ```
 
-### POST /items
+### GET /rentals/products/{product_id}
 
-Creates an item.
+Response `200`: single product object.
 
-Request:
+Errors: `404`.
 
+### GET /rentals/products/{product_id}/availability
+
+Query parameters:
+- `start_date`: `YYYY-MM-DD`
+- `end_date`: `YYYY-MM-DD`
+
+Response `200`:
 ```json
 {
-  "name": "Camera",
-  "category": "rental",
-  "quantity": 3
+  "product_id": "...",
+  "busy_periods": [
+    { "start": "2026-05-01", "end": "2026-05-07" }
+  ],
+  "free_windows": [
+    { "start": "2026-05-08", "end": "2026-05-31" }
+  ]
 }
 ```
 
-Response `201`:
+### GET /rentals/kth-busiest-date
 
+Query parameters:
+- `k`: integer — rank position
+- `start_date`: `YYYY-MM-DD`
+- `end_date`: `YYYY-MM-DD`
+
+Response `200`:
+```json
+{ "date": "2026-05-15", "rental_count": 42 }
+```
+
+### GET /rentals/products/{product_id}/free-streak
+
+Query parameters:
+- `year`: integer
+
+Response `200`:
 ```json
 {
-  "id": 1,
-  "name": "Camera",
-  "category": "rental",
-  "quantity": 3,
-  "created_at": "2026-04-28T00:00:00Z"
+  "product_id": "...",
+  "year": 2026,
+  "streak_start": "2026-06-01",
+  "streak_end": "2026-06-30",
+  "length_days": 30
 }
 ```
 
-Possible errors:
+### GET /rentals/merged-feed
 
-- `401` if the bearer token is missing or invalid
-- `422` if validation fails
+Query parameters:
+- `product_ids`: comma-separated list of product IDs
+- `start_date`: `YYYY-MM-DD`
+- `end_date`: `YYYY-MM-DD`
 
-## AI Agent Service
-
-Gateway path prefix: `/ai`
-
-### POST /ai/chat
-
-Accepts a question and returns deterministic JSON output.
-
-Request:
-
+Response `200`:
 ```json
 {
-  "query": "How does JWT auth protect item inventory endpoints?",
-  "top_k": 2
+  "rentals": [
+    { "product_id": "...", "start": "2026-05-01", "end": "2026-05-05", "user_id": "..." }
+  ]
+}
+```
+
+### GET /rentals/users/{user_id}/top-categories
+
+Query parameters:
+- `k`: integer — number of top categories to return
+
+Response `200`:
+```json
+{
+  "user_id": "...",
+  "categories": [
+    { "category": "TOOLS", "rental_count": 12 },
+    { "category": "CAMERAS", "rental_count": 8 }
+  ]
+}
+```
+
+---
+
+## Analytics Service
+
+All analytics endpoints require `Authorization: Bearer <token>`.
+
+### GET /analytics/trends
+
+Query parameters:
+- `category`: optional string
+- `period`: optional (e.g. `monthly`, `weekly`)
+
+Response `200`:
+```json
+{ "data": { ... } }
+```
+
+### GET /analytics/surge
+
+Response `200`:
+```json
+{ "data": { ... } }
+```
+
+### GET /analytics/recommendations
+
+Response `200`:
+```json
+{ "data": { ... } }
+```
+
+### GET /analytics/peak-window
+
+Query parameters:
+- `category`: optional string
+- `month`: integer (1–12)
+- `year`: integer
+
+Response `200`:
+```json
+{ "data": { ... } }
+```
+
+### GET /analytics/surge-days
+
+Query parameters:
+- `category`: optional string
+- `month`: integer
+- `year`: integer
+
+Response `200`:
+```json
+{ "data": { ... } }
+```
+
+---
+
+## Agentic Service (Chat)
+
+All chat endpoints require `Authorization: Bearer <token>`.
+
+### POST /chat
+
+Accepts a query and returns an AI-generated answer grounded in rental and analytics data.
+
+Request:
+```json
+{
+  "query": "Is the tools category growing?",
+  "top_k": 3,
+  "session_id": "optional-existing-session-id"
 }
 ```
 
 Response `200`:
-
 ```json
 {
-  "answer": "Based on the indexed service context, the best answer to 'How does JWT auth protect item inventory endpoints?' is: JWT auth protects downstream services and keeps gateway checks centralized.",
-  "sources": [
-    "security/auth.md"
-  ],
-  "confidence": 0.6
+  "answer": "Yes, tools rentals are up 18% month-over-month...",
+  "sources": ["analytics/trends", "rental/products"],
+  "confidence": 0.85,
+  "session_id": "uuid"
 }
 ```
 
-Behavior notes:
+If `session_id` is omitted, a new session is created and the ID is returned.
 
-- Irrelevant queries are rejected with a valid JSON payload rather than a transport error.
-- The service uses lightweight relevance heuristics and an in-memory knowledge base.
-- The response shape is stable even when no relevant context is found.
+### GET /chat/sessions
 
-Example unrelated-query response:
+Returns a list of all active chat sessions.
 
+Response `200`:
 ```json
 {
-  "answer": "Query rejected because it is outside the supported business context.",
-  "sources": [],
-  "confidence": 0.0
+  "sessions": [
+    { "session_id": "uuid", "created_at": "...", "message_count": 5 }
+  ]
 }
 ```
 
-## Downstream Health Endpoints
+### GET /chat/{session_id}/history
 
-The following service-local routes exist mainly for container health checks:
+Returns the full conversation history for a session.
 
-- `GET /health` on `auth-service`
-- `GET /health` on `item-service`
-- `GET /health` on `ai-agent-service`
+Response `200`:
+```json
+{
+  "session_id": "uuid",
+  "messages": [
+    { "role": "user", "content": "Is tools growing?", "timestamp": "..." },
+    { "role": "assistant", "content": "Yes, ...", "timestamp": "..." }
+  ]
+}
+```
 
-These are not intended as a substitute for gateway-level monitoring, but they are useful for debugging a specific container.
+### DELETE /chat/{session_id}
+
+Deletes a chat session and its history from Redis.
+
+Response `204`: no content.
+
+---
+
+## Gateway Failure Semantics
+
+| Response | Cause |
+|----------|-------|
+| `401 {"detail":"Missing bearer token"}` | Protected route called without `Authorization` header |
+| `401 {"detail":"Invalid token"}` | JWT validation failed at gateway |
+| `502 {"detail":"Upstream service unavailable"}` | gRPC `UNAVAILABLE` from downstream |
+| `503 {"detail":"Central API rate limit exceeded"}` | Central API returned 429 after retries |
+| `504 {"detail":"Upstream service timeout"}` | gRPC `DEADLINE_EXCEEDED` from downstream |
+
+---
+
+## Downstream Status Endpoints
+
+Each service exposes `GET /status` on its HTTP port for container health checks:
+- `http://user-service:8001/status`
+- `http://rental-service:8002/status`
+- `http://analytics-service:8003/status`
+- `http://agentic-service:8004/status`
+
+These are not proxied through the gateway for direct client use, but they are accessible through `GET /{service}/status` on the gateway.

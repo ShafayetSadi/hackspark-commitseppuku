@@ -19,7 +19,7 @@ def test_prometheus_rules_define_baseline_alerts():
     assert "alert: HacksparkTargetDown" in content
     assert "alert: HacksparkHigh5xxRate" in content
     assert (
-        'job=~"prometheus|api-gateway|auth-service|item-service|ai-agent-service|cadvisor"'
+        'job=~"prometheus|api-gateway|user-service|rental-service|analytics-service|agentic-service|cadvisor"'
         in content
     )
 
@@ -36,6 +36,6 @@ def test_dashboard_covers_priority_observability_panels():
     assert "Active Alerts" in panels
     assert "Prometheus Health" in panels
     assert (
-        'job=~"prometheus|api-gateway|auth-service|item-service|ai-agent-service|cadvisor"'
+        'job=~"prometheus|api-gateway|user-service|rental-service|analytics-service|agentic-service|cadvisor"'
         in (panels["Service Health"]["targets"][0]["expr"])
     )

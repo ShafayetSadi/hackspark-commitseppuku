@@ -1,222 +1,220 @@
 # Architecture
 
-This repository is a minimal microservices baseline optimized for a fast team sprint. The intent is to keep infrastructure concerns solved early so most work happens inside service business logic.
+RentPi is a microservices stack built for a hackathon sprint. The API gateway is the public HTTP entry point; all internal service-to-service traffic uses gRPC.
+
+![RentPi System Architecture](./images/RentPi%20Microservices%20System%20Architecture.png)
 
 ## System Overview
 
-The stack consists of:
+| Service | Folder | HTTP Port | gRPC Port | Responsibility |
+|---------|--------|-----------|-----------|----------------|
+| `api-gateway` | `api-gateway/` | 8000 | — | JWT validation, HTTP→gRPC translation, `/status` aggregation |
+| `user-service` | `user-service/` | 8001 | 50051 | Auth (register/login/me), Postgres, Alembic |
+| `rental-service` | `rental-service/` | 8002 | 50052 | Products, availability, interval algorithms — proxies Central API |
+| `analytics-service` | `analytics-service/` | 8003 | 50053 | Trends, surge detection, recommendations — proxies Central API |
+| `agentic-service` | `agentic-service/` | 8004 | 50054 | AI chatbot, Redis session store, gRPC grounding via rental/analytics |
+| `frontend` | `frontend/` | 3000 | — | Next.js 16 UI, talks only through api-gateway |
 
-- `api-gateway`: the public entrypoint and unified API docs surface.
-- `auth-service`: user registration, login, and token-backed identity lookup.
-- `ai-agent-service`: deterministic RAG-lite chat endpoint.
-- `item-service`: CRUD-style service template for domain entities.
-- `postgres`: shared database container for persisted services.
+Infrastructure containers: `postgres` (5432), `redis` (6379).
 
-## High-Level Request Flow
+## Request Flow
 
 ```text
 Client
   |
   v
-API Gateway
-  |-- /auth/* --> auth-service
-  |-- /items* --> item-service
-  '-- /ai/* --> ai-agent-service
-
-auth-service <----> PostgreSQL
-item-service <----> PostgreSQL
-ai-agent-service -> in-memory knowledge base
+api-gateway:8000  (HTTP/JSON)
+  |
+  |-- JWT validation (public paths bypass)
+  |
+  |-- /users/*          --gRPC--> user-service:50051       --> PostgreSQL
+  |-- /rentals/*        --gRPC--> rental-service:50052     --> Central API
+  |-- /analytics/*      --gRPC--> analytics-service:50053  --> Central API
+  |-- /chat             --gRPC--> agentic-service:50054    --> Redis
+  |                                                        --> rental-service:50052 (tool calls)
+  |                                                        --> analytics-service:50053 (tool calls)
+  |
+  |-- /<service>/status --HTTP--> service:800x/status   (parallel, asyncio.gather)
 ```
 
 ## Design Principles
 
-### 1. Explicit service boundaries
+### gRPC internally, HTTP externally
 
-- Each service owns its routes, schemas, and business logic.
-- The gateway forwards requests but does not absorb downstream domain logic.
+The gateway translates HTTP/JSON to gRPC for every downstream call. Services expose HTTP only for health/status checks — not for business logic.
 
-### 2. Shared only where it pays off
+### Explicit service boundaries
 
-`shared/app_core` contains:
+No service imports domain logic from another service. Cross-service calls always go through gRPC stubs.
 
-- configuration primitives
-- database engine and session helpers
-- structured logging setup
-- shared HTTP request logging middleware
-- shared Prometheus metrics middleware and exporter
-- password hashing and JWT helpers
+### Shared only where it pays off
 
-This keeps repetitive plumbing consistent without coupling service internals.
+`shared/app_core/` contains:
+- `central_api.py` — rate-limited Central API client (20 req/min)
+- `config.py` — `CommonSettings` base class (pydantic-settings)
+- `security.py` — Argon2 password hashing, JWT creation/decoding
+- `database.py` — async SQLAlchemy engine/session helpers
+- `grpc_errors.py` — gRPC→HTTP status code mapping for the gateway
+- `grpc_interceptors.py` — `register_health()` for gRPC health protocol
+- `service_runtime.py` — `serve_http_and_grpc()` dual-protocol server factory
+- `http.py` — request logging middleware with `X-Request-ID`
+- `logging.py` — structlog JSON configuration
+- `metrics.py` — Prometheus metrics middleware
 
-### 3. Hackathon-first pragmatism
+### Central API rate limiting
 
-- Alembic is the only schema source of truth for persisted services.
-- Service startup validates the migrated schema and fails loudly on drift or missing tables.
-- The AI service uses deterministic RAG-lite components and a replaceable mock LLM instead of a fragile external dependency by default.
+The Central API enforces 30 req/min per team token. `CentralAPIClient` uses a sliding-window rate limiter capped at 20 req/min (10 req/min safety buffer). It retries with exponential backoff and raises a `503` after 3 failed attempts.
 
 ## Repository Layout
 
 ```text
 .
-├── docs/
-├── gateway/
-│   └── app/
-├── services/
-│   ├── ai-agent-service/
-│   ├── auth-service/
-│   └── item-service/
+├── api-gateway/
+│   └── gateway/
+│       ├── main.py
+│       ├── core/config.py
+│       ├── api/routes.py
+│       └── grpc_clients/
+├── user-service/
+│   └── auth_service/
+│       ├── main.py
+│       ├── grpc_service.py
+│       ├── http_app.py
+│       ├── services/
+│       ├── models/
+│       └── api/
+├── rental-service/
+│   └── rental_service/
+│       ├── main.py
+│       ├── grpc_service.py
+│       ├── services/
+│       └── utils/
+├── analytics-service/
+│   └── analytics_service/
+│       ├── main.py
+│       ├── grpc_service.py
+│       └── services/
+├── agentic-service/
+│   └── ai_agent_service/
+│       ├── main.py
+│       ├── grpc_service.py
+│       ├── services/
+│       │   ├── chat_service.py
+│       │   ├── session_store.py
+│       │   ├── tool_executor.py
+│       │   └── llm/
+│       └── rag/
+├── frontend/
+│   ├── app/
+│   │   ├── api/          # Next.js server-side proxies
+│   │   └── ...           # App Router pages
+│   └── lib/auth-service.ts
+├── proto/                # .proto source files
+│   ├── user.proto
+│   ├── rental.proto
+│   ├── analytics.proto
+│   └── agentic.proto
 ├── shared/
-│   └── app_core/
-├── scripts/
+│   ├── app_core/         # cross-cutting utilities
+│   └── grpc_gen/         # generated stubs (committed, not built at runtime)
+├── tests/
+├── monitoring/
+│   ├── prometheus/
+│   └── grafana/
 ├── docker-compose.yml
 ├── docker-compose.prod.yml
+├── Makefile
 ├── pyproject.toml
 └── uv.lock
 ```
 
 ## Service Details
 
-### API Gateway
+### API Gateway (`api-gateway/`)
 
-Responsibilities:
+- Public HTTP entry point on port 8000.
+- JWT validation for all routes except the public list below.
+- Routes HTTP requests to downstream gRPC services via stub clients in `gateway/grpc_clients/`.
+- Aggregates `/status` from all services in parallel using `asyncio.gather`.
 
-- public entrypoint
-- JWT validation for protected routes
-- request forwarding to downstream services
-- service registry via environment variables
+Public (no JWT required): `/status`, `/health`, `/user-service/status`, `/rental-service/status`, `/analytics-service/status`, `/agentic-service/status`, `/users/login`, `/users/register`, `/docs`, `/openapi.json`, `/redoc`, `/metrics`.
 
-Important files:
+### User Service (`user-service/`)
 
-- `gateway/gateway/main.py`
-- `gateway/gateway/api/routes.py`
-- `gateway/gateway/services/proxy.py`
+- Runs gRPC on 50051 and HTTP on 8001 (status only).
+- Owns the `users` table in PostgreSQL (Alembic migrations).
+- gRPC methods: `Register`, `Login`, `Me`, `GetDiscount`.
+- Discount is computed from a security score via Central API.
 
-Notes:
+### Rental Service (`rental-service/`)
 
-- `/auth/register`, `/users/login`, and `/health` are treated as public.
-- Protected routes require a bearer token validated with the shared JWT secret.
-- Forwarding now includes explicit timeout and upstream-network failure handling in `gateway/gateway/services/proxy.py`.
-- Request logging is centralized through `shared/app_core/http.py`.
-- Gateway docs remain enabled in both dev and prod.
+- Runs gRPC on 50052 and HTTP on 8002.
+- Proxies all product data from the Central API through `CentralAPIClient`.
+- Implements interval algorithms: availability windows, k-th busiest date, longest free streak, merged feed, user top categories.
 
-### Auth Service
+### Analytics Service (`analytics-service/`)
 
-Responsibilities:
+- Runs gRPC on 50053 and HTTP on 8003.
+- Proxies analytics data from the Central API.
+- gRPC methods: `GetTrends`, `GetSurge`, `GetRecommendations`, `GetPeakWindow`, `GetSurgeDays`.
 
-- user registration
-- credential verification
-- JWT issuance
-- current-user lookup
+### Agentic Service (`agentic-service/`)
 
-Important files:
+- Runs gRPC on 50054 and HTTP on 8004.
+- Stores conversation sessions in Redis (TTL-based auto-cleanup).
+- LLM provider is configurable: `mock`, `gemini`, `openai`, `groq`.
+- Chat pipeline: load session → LLM decides tool → execute tool via gRPC → synthesize answer.
+- Exposes HTTP routes for session management (`/chat/sessions`, `/chat/{id}/history`).
 
-- `services/auth_service/auth_service/main.py`
-- `services/auth_service/auth_service/api/routes.py`
-- `services/auth_service/auth_service/api/dependencies.py`
-- `services/auth_service/auth_service/services/auth_service.py`
-- `services/auth_service/auth_service/models/user.py`
+### Frontend (`frontend/`)
 
-Notes:
-
-- Passwords are hashed with `argon2-cffi`.
-- User lookup is persisted in PostgreSQL by default.
-- The `/me` endpoint depends on token context populated by middleware.
-- Use-case code raises service-specific errors and leaves HTTP translation to the route layer.
-- Swagger/OpenAPI routes are enabled only in `APP_ENV=dev`.
-
-### AI Agent Service
-
-Responsibilities:
-
-- validate chat input
-- run relevance filtering
-- retrieve lightweight context from an internal knowledge set
-- return deterministic JSON output through a replaceable LLM interface
-
-Important files:
-
-- `services/ai_agent_service/ai_agent_service/api/routes.py`
-- `services/ai_agent_service/ai_agent_service/services/chat_service.py`
-- `services/ai_agent_service/ai_agent_service/services/rag/relevance.py`
-- `services/ai_agent_service/ai_agent_service/services/rag/retriever.py`
-- `services/ai_agent_service/ai_agent_service/services/rag/context_builder.py`
-- `services/ai_agent_service/ai_agent_service/services/llm/base.py`
-- `services/ai_agent_service/ai_agent_service/services/llm/mock_llm.py`
-- `services/ai_agent_service/ai_agent_service/services/knowledge_base.py`
-
-Notes:
-
-- No external LLM dependency is required to boot the system.
-- The mock LLM is deterministic and avoids prompt echoing.
-- Swagger/OpenAPI routes are enabled only in `APP_ENV=dev`.
-
-### Item Service
-
-Responsibilities:
-
-- example service template for CRUD-like domain logic
-- pagination and filtering
-- database-backed resource access
-
-Important files:
-
-- `services/item-service/app/api/routes.py`
-- `services/item-service/app/services/item_service.py`
-- `services/item-service/app/models/item.py`
-
-Notes:
-
-- The service demonstrates query filtering and paginated reads.
-- Composite and single-column indexes are included as examples.
-- Swagger/OpenAPI routes are enabled only in `APP_ENV=dev`.
+- Next.js 16, React 19, TypeScript, Tailwind CSS 4.
+- Runs on port 3000.
+- All API calls go through Next.js server-side API routes (`/app/api/*`) which proxy to the gateway.
+- JWT stored in an HTTP-only cookie (`hackspark_auth_token`).
 
 ## Data and Persistence
 
-Persisted services:
+| Store | Owner | Data |
+|-------|-------|------|
+| PostgreSQL | user-service | `users` table (id, email, full_name, hashed_password) |
+| Redis | agentic-service | Chat session history and metadata |
+| Central API | rental-service, analytics-service | All product, rental, and analytics data |
 
-- `auth-service`
-- `item-service`
+No service stores product or rental data locally.
 
-Database characteristics:
+## gRPC Contracts
 
-- async SQLAlchemy sessions
-- PostgreSQL by default
-- SQLite fallback support for simplified local runs
-- indexed columns where lookups are expected
+Proto files live in `proto/`. Generated stubs are in `shared/grpc_gen/` — committed to the repo; run `make proto` after editing any `.proto`.
 
-Current schema ownership:
+Always import stubs as:
+```python
+from shared.grpc_gen import user_pb2, user_pb2_grpc
+```
 
-- `users` table belongs to `auth-service`
-- `items` table belongs to `item-service`
+gRPC error mapping (gateway): `shared/app_core/grpc_errors.grpc_to_http_exception()` converts gRPC status codes to HTTP 400/401/404/409/502/504.
 
 ## Infrastructure
 
-### Dependency management
-
-- Root `pyproject.toml`
-- Root `uv.lock`
-- Local `.venv` via `uv sync`
-- Docker syncs production dependencies from the same lockfile
-
 ### Containerization
 
-- one Dockerfile per service
-- `docker-compose.yml` for debug-friendly local work
-- `docker-compose.prod.yml` for production-like app exposure (gateway public; internal app services private) plus bundled monitoring endpoints
-- health checks for every container
-- service-to-service traffic over the Compose network
+- One Dockerfile per service (multi-stage, Python 3.12 or Node 22).
+- `docker-compose.yml` — dev stack (all services + postgres + redis + monitoring).
+- `docker-compose.prod.yml` — production-like variant (gateway public, internal services private).
+- Health checks on every container.
 
 ### Quality tooling
 
-- `ruff` for formatting and linting
-- `ty` for type checking
-- `pytest` for auth, item, AI, and gateway integration coverage
-- `Makefile` for the common developer workflow
+- `ruff` — formatting and linting
+- `ty` — type checking per service
+- `pytest` — unit and integration tests
+- `make check` — runs format + lint + typecheck + test
 
 ## Known Intentional Tradeoffs
 
-- The gateway performs token validation locally instead of delegating each check to the auth service. This reduces request hops and keeps the public edge simple, but requires secret consistency across services.
-- The two persisted services share one PostgreSQL instance. That is acceptable for a hackathon baseline, but stricter isolation may be preferable later.
-- The AI service is not a full RAG system. It is designed for predictable hackathon demos and simple future replacement.
-- Dev mode deliberately exposes internal service ports and docs for debugging; prod mode removes internal app-service host entrypoints, but still publishes gateway, Prometheus, and Grafana for observability.
-- `docker-compose.prod.yml` includes privileged cAdvisor host mounts as an observability tradeoff and is not a hardened production blueprint by itself.
+- The gateway validates JWT locally rather than delegating to user-service to reduce hop latency.
+- All backend services share one PostgreSQL instance (only user-service actually writes to it).
+- The Central API rate limit is enforced per-process, not cluster-wide; avoid horizontal scaling without a shared Redis limiter.
+- Redis is required for agentic-service session storage; the service will fail to start if Redis is unreachable.
+- Dev mode exposes all internal service ports; prod mode restricts them.
+- The `LLM_PROVIDER=mock` setting lets the stack run without any external LLM API key.

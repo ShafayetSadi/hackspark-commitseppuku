@@ -1,24 +1,21 @@
 # Git Workflow
 
-This repository is meant for fast parallel execution by a small team. The workflow should stay disciplined enough to avoid merge chaos, but light enough for a hackathon.
+Lightweight branch, review, and commit workflow for a short hackathon sprint.
 
 ## Branch Strategy
 
-Recommended branches:
-
-- `main`: stable demo-ready branch
-- `dev`: integration branch for active team work
-- `feat/<short-name>`: feature branches
-- `fix/<short-name>`: bug-fix branches
-- `docs/<short-name>`: documentation-only branches
-
-If the team is very small, `dev` can be optional. If multiple people are working at once, keep it.
+- `main` — stable demo-ready branch
+- `dev` — integration branch for active team work (optional for very small teams)
+- `feat/<short-name>` — feature branches
+- `fix/<short-name>` — bug-fix branches
+- `docs/<short-name>` — documentation-only branches
 
 ## Branch Naming Examples
 
-- `feat/auth-refresh`
-- `feat/item-filters`
-- `fix/gateway-token-check`
+- `feat/rental-availability`
+- `feat/analytics-surge`
+- `feat/chat-sessions`
+- `fix/gateway-grpc-timeout`
 - `docs/api-reference`
 
 ## Daily Workflow
@@ -33,67 +30,69 @@ If the team is very small, `dev` can be optional. If multiple people are working
 
 Prefer short, descriptive commits:
 
-- `feat(auth): add duplicate email guard`
-- `feat(items): add category filter and pagination`
-- `fix(gateway): reject missing bearer token`
-- `docs(api): document chat response contract`
-- `chore(dev): migrate project to uv and ruff`
+- `feat(rental): add availability interval algorithm`
+- `feat(analytics): add surge detection endpoint`
+- `feat(chat): add Redis session store`
+- `fix(gateway): correct gRPC deadline error mapping`
+- `feat(proto): add GetDiscount RPC to user.proto`
+- `docs(api): document rental endpoints`
+- `chore(proto): regenerate grpc stubs`
 
 Rules:
-
-- One commit should represent one coherent change.
+- One commit = one coherent change.
 - Avoid mixing docs, refactors, and behavior changes without a reason.
-- If the change modifies an API contract, update docs in the same branch.
+- If the change modifies an API contract, update `docs/api-documentation.md` in the same branch.
+- If the change adds a new proto RPC, commit the updated `.proto` **and** the regenerated stubs together.
 
 ## Pull Request Checklist
 
 Before merging:
-
-- code builds locally or in Docker
+- Code builds locally or in Docker
 - `make check` passes
-- docs are updated for behavior changes
-- new environment variables are documented
-- gateway and service contracts are still aligned
+- Docs updated for behavior changes
+- New environment variables added to `.env.example`
+- Proto changes regenerated with `make proto`
+- Gateway routes and service contracts are still aligned
+- No `CENTRAL_API_TOKEN` or other secrets committed
 
 ## Team Ownership Suggestions
 
 For hackathon speed, assign broad ownership areas:
+- One person on gateway and user-service
+- One person on rental-service algorithms
+- One person on analytics-service and agentic-service
+- One person on frontend and demo flow
 
-- one person on gateway and auth
-- one person on domain services
-- one person on AI integration or prompt behavior
-- one person on frontend or demo flow
-
-Even when ownership is broad, shared utilities should be changed carefully because they affect every service.
+When touching `shared/app_core/` or `proto/`, coordinate — these affect every service.
 
 ## Merge Discipline
 
-- Rebase or merge from `dev` frequently if the team is moving fast.
-- Prefer smaller merges several times a day instead of one large end-of-day merge.
-- If two branches touch the same service entrypoints, resolve the contract before coding diverges further.
+- Rebase or merge from `dev` frequently when the team is moving fast.
+- Prefer smaller merges several times a day over one large end-of-day merge.
+- If two branches touch the same service's gRPC contract or gateway routes, resolve the contract before coding diverges further.
 
 ## Documentation Workflow
 
-Documentation is not a post-hack cleanup item. Update:
+Documentation is not a post-hack cleanup item. Update in the same PR:
 
 - `docs/api-documentation.md` when routes or payloads change
 - `docs/architecture.md` when service boundaries change
 - `docs/development-guide.md` when setup or tooling changes
 - `docs/operations.md` when Docker, health checks, or environment variables change
+- `CLAUDE.md` when adding or changing services (the AGENTS.md table)
 
 ## Release and Demo Flow
 
 Before a demo or judging session:
 
-1. Merge the selected changes into `main`.
-2. Run `docker compose -f docker-compose.prod.yml up --build`.
-3. Verify auth, item creation, and AI chat via the gateway.
-4. Confirm only `api-gateway` is published with `docker compose -f docker-compose.prod.yml ps`.
-5. Tag the demo commit if needed.
+1. Merge selected changes into `main`.
+2. Run `make down-v && make up-build` for a clean start.
+3. Run the smoke tests from `CLAUDE.md` (register, login, rentals, analytics, chat).
+4. Confirm `http://localhost:8000/status` shows all services green.
+5. Confirm `http://localhost:3000` (frontend) is responsive.
+6. Tag the demo commit if needed.
 
 ## If the Repository Is Not Yet Initialized
-
-If Git has not been initialized in the current working directory yet:
 
 ```bash
 git init
@@ -101,4 +100,4 @@ git add .
 git commit -m "chore: initialize hackathon boilerplate"
 ```
 
-Then create `main` and `dev` according to the team workflow.
+Then create `main` and `dev` branches according to the team workflow.

@@ -20,20 +20,25 @@ scrape_configs:
     static_configs:
       - targets: ["api-gateway:8000"]
 
-  - job_name: auth-service
+  - job_name: user-service
     metrics_path: /metrics
     static_configs:
-      - targets: ["auth-service:8000"]
+      - targets: ["user-service:8001"]
 
-  - job_name: item-service
+  - job_name: rental-service
     metrics_path: /metrics
     static_configs:
-      - targets: ["item-service:8000"]
+      - targets: ["rental-service:8002"]
 
-  - job_name: ai-agent-service
+  - job_name: analytics-service
     metrics_path: /metrics
     static_configs:
-      - targets: ["ai-agent-service:8000"]
+      - targets: ["analytics-service:8003"]
+
+  - job_name: agentic-service
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["agentic-service:8004"]
 
   - job_name: cadvisor
     metrics_path: /metrics

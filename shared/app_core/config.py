@@ -1,5 +1,6 @@
 from functools import lru_cache
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,6 +25,17 @@ class CommonSettings(BaseSettings):
     central_api_redis_url: str | None = None
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    @field_validator("metrics_token", mode="before")
+    @classmethod
+    def normalize_metrics_token(cls, value: object) -> object:
+        if not isinstance(value, str):
+            return value
+
+        normalized = value.strip()
+        if not normalized or normalized.startswith("#"):
+            return None
+        return normalized
 
     @property
     def normalized_app_env(self) -> str:

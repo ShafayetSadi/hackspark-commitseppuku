@@ -1,143 +1,117 @@
 # Observability
 
-This document describes the logging and monitoring setup that is implemented in `hackspark` today. It is meant to be the source of truth for demos, debugging, and future observability changes.
+Logging, metrics, and dashboarding setup for the RentPi stack.
 
 ## Overview
 
-The repo uses two complementary observability layers:
+Two complementary observability layers:
+- Structured JSON logs from every FastAPI service (via `structlog`)
+- Prometheus-compatible metrics exported by the gateway and each service
 
-- structured JSON logs from every FastAPI service
-- Prometheus-compatible metrics exported by the gateway and each internal service
-
-The Docker stack also includes:
-
+The prod Docker stack (`docker-compose.prod.yml`) also includes:
 - `prometheus` for scraping and querying metrics
 - `grafana` for dashboarding
 - `cadvisor` for container CPU and memory metrics
 
-The goal is pragmatic hackathon visibility:
+The dev stack (`docker-compose.yml`) does not include monitoring containers — run the prod compose to get Grafana and Prometheus.
 
-- trace a request across services with `X-Request-ID`
-- inspect latency and error behavior quickly
-- show a live dashboard during judging
+Goals:
+- Trace a request across services with `X-Request-ID`
+- Inspect latency and error behavior quickly
+- Show a live dashboard during judging
 
 ## Logging
 
-### Implementation Logging
+### Implementation
 
 Structured logging is configured in `shared/app_core/logging.py` using `structlog` with JSON output to stdout.
 
-The current setup also normalizes stdlib and Uvicorn logs through the same JSON formatter and disables Uvicorn access logs in the service entrypoints so request logging is not duplicated.
+The setup normalizes stdlib and Uvicorn logs through the same JSON formatter and disables Uvicorn access logs so request logging is not duplicated.
 
-Request logging is installed by `shared/app_core/http.py` in:
+Request logging is installed by `shared/app_core/http.py` in every service's `main.py` via `serve_http_and_grpc()`.
 
-- `gateway/gateway/main.py`
-- `services/auth_service/auth_service/main.py`
-- `services/item-service/app/main.py`
-- `services/ai_agent_service/ai_agent_service/main.py`
-
-Each request emits:
-
+Each request emits three events:
 - `request_started`
 - `request_completed`
-- `request_failed`
+- `request_failed` (for unhandled exceptions, includes stack trace)
 
-### Logged fields
+gRPC servicers also emit:
+- `grpc_request_started`
+- `grpc_request_completed`
 
-Common fields in request logs:
+### Log Fields
 
-- `request_id`
-- `method`
-- `path`
-- `has_query_params`
-- `query_keys`
-- `client_host`
-- `status_code` on completion
-- `duration_ms`
-- `timestamp`
-- `level`
-- `logger`
+Common fields in every request log:
 
-`request_failed` is emitted for unhandled exceptions and includes the request metadata plus the exception stack trace from `logger.exception(...)`.
+| Field | Description |
+|-------|-------------|
+| `request_id` | UUID, from `X-Request-ID` header or auto-generated |
+| `method` | HTTP method |
+| `path` | Request path |
+| `query_keys` | Names of query params (not values, to avoid leaking tokens) |
+| `client_host` | Client IP |
+| `status_code` | On `request_completed` |
+| `duration_ms` | On `request_completed` and `request_failed` |
+| `timestamp` | ISO 8601 |
+| `level` | Log level |
+| `logger` | Logger name |
 
-The middleware intentionally logs only query parameter names, not raw query values, to avoid leaking tokens or other sensitive data into the default log stream.
+### Request Correlation
 
-### Request correlation
+The middleware accepts an incoming `X-Request-ID` header. If absent, it generates a UUID.
 
-The middleware accepts an incoming `X-Request-ID` header when present. If the client does not send one, the app generates a UUID.
-
-The resolved request id is:
-
+The resolved ID is:
 - stored on `request.state.request_id`
-- written into every request log event
-- returned in the response header on successful responses
-- returned in the JSON body for middleware-generated `500` responses
+- included in every log event for that request
+- returned in the `X-Request-ID` response header on success
 
-This is the easiest way to correlate:
+To trace a single request:
+1. Capture `X-Request-ID` from the gateway response header.
+2. Search for that ID in gateway logs.
+3. Search for the same ID in the downstream service logs.
 
-1. a browser or `curl` response
-2. gateway logs
-3. downstream logs when the id is forwarded by the client or calling layer
+### Example Log Flow
 
-### Example log flow
-
-For a successful request, expect:
-
+Successful request:
 ```json
-{"request_id":"...","method":"POST","path":"/users/login","event":"request_started","timestamp":"...","level":"info"}
-{"request_id":"...","method":"POST","path":"/users/login","status_code":200,"duration_ms":12.41,"event":"request_completed","timestamp":"...","level":"info"}
+{"request_id":"abc123","method":"POST","path":"/users/login","event":"request_started","timestamp":"...","level":"info"}
+{"request_id":"abc123","method":"POST","path":"/users/login","status_code":200,"duration_ms":12.41,"event":"request_completed","timestamp":"...","level":"info"}
 ```
 
-For an unhandled failure, expect:
-
+Unhandled failure:
 ```json
-{"request_id":"...","method":"GET","path":"/items","duration_ms":4.87,"event":"request_failed","timestamp":"...","level":"error"}
+{"request_id":"abc123","method":"GET","path":"/rentals/products","duration_ms":4.87,"event":"request_failed","timestamp":"...","level":"error"}
 ```
 
-### How to read logs
+### Reading Logs
 
-To stream the full stack:
-
+Stream all services:
 ```bash
 docker compose logs -f
 ```
 
-To stream one service:
-
+Stream one service:
 ```bash
 docker compose logs -f api-gateway
-docker compose logs -f auth-service
-docker compose logs -f item-service
-docker compose logs -f ai-agent-service
+docker compose logs -f user-service
+docker compose logs -f rental-service
+docker compose logs -f analytics-service
+docker compose logs -f agentic-service
 ```
-
-When debugging:
-
-- start with the gateway log line for the failing route
-- copy the `request_id`
-- search for the same id in the relevant downstream container logs
 
 ## Metrics
 
-### Implementation Metrics
+### Implementation
 
-Prometheus metrics are installed by `shared/app_core/metrics.py`.
+Prometheus metrics are installed by `shared/app_core/metrics.py` in each service.
 
-Each app exposes:
+Each app exposes `GET /metrics`. The gateway exposes it publicly (no JWT required). Internal services expose it for Prometheus scraping over the Compose network.
 
-- `GET /metrics`
+Control via environment variables:
+- `METRICS_ENABLED=true|false` — enable or disable the endpoint
+- `METRICS_TOKEN=<token>` — require a bearer token on `/metrics`
 
-The gateway exposes `/metrics` publicly without JWT auth. Internal services also expose `/metrics`, but they are intended to be scraped over the Compose network rather than called directly from outside.
-
-Metrics can be controlled with environment settings:
-
-- `METRICS_ENABLED=true|false` to enable/disable endpoint registration
-- `METRICS_TOKEN=<token>` to require a token on `/metrics`
-
-If `METRICS_TOKEN` is set, Prometheus scrape jobs must send the same token (for example via `authorization` or `http_headers` in `monitoring/prometheus/prometheus.yml`), otherwise scrapes will return `401` and targets will show as down.
-
-Example Prometheus job when `METRICS_TOKEN` is enabled:
-
+If `METRICS_TOKEN` is set, update `monitoring/prometheus/prometheus.yml` to send the same token in scrape configs:
 ```yaml
 - job_name: api-gateway
   metrics_path: /metrics
@@ -148,145 +122,114 @@ Example Prometheus job when `METRICS_TOKEN` is enabled:
     - targets: ["api-gateway:8000"]
 ```
 
-Metrics use a per-process Prometheus registry so tests and multi-app imports do not collide inside one Python process.
+### Exported Application Metrics
 
-### Exported application metrics
+| Metric | Type | Description |
+|--------|------|-------------|
+| `hackspark_http_requests_total` | Counter | Total HTTP requests |
+| `hackspark_http_request_duration_seconds` | Histogram | HTTP request latency |
+| `hackspark_http_requests_in_flight` | Gauge | Active HTTP requests |
 
-The current app metrics are:
+Labels: `service`, `method`, `path_template`, `status_code` (totals only).
 
-- `hackspark_http_requests_total`
-- `hackspark_http_request_duration_seconds`
-- `hackspark_http_requests_in_flight`
+Notes:
+- Route templates (e.g. `/rentals/products/{id}`) are used to prevent label explosion.
+- `/metrics` is excluded from request counting so Prometheus scrapes do not distort charts.
+- `/health` and `/status` remain instrumented.
 
-Metric labels:
-
-- `service`
-- `method`
-- `path_template`
-- `status_code` for request totals
-
-Important behavior:
-
-- route templates are used when available, such as `/items` or `/auth/{path:path}`, to avoid label explosion
-- `/metrics` is excluded from request counting and latency measurement so Prometheus scrapes do not distort charts
-- `/health` remains instrumented and visible
-
-### Scrape targets
+### Scrape Targets
 
 Prometheus is configured in `monitoring/prometheus/prometheus.yml` to scrape:
 
-- `prometheus:9090/metrics`
-- `api-gateway:8000/metrics`
-- `auth-service:8000/metrics`
-- `item-service:8000/metrics`
-- `ai-agent-service:8000/metrics`
-- `cadvisor:8080/metrics`
+| Target | Address |
+|--------|---------|
+| `prometheus` | `prometheus:9090/metrics` |
+| `api-gateway` | `api-gateway:8000/metrics` |
+| `user-service` | `user-service:8001/metrics` |
+| `rental-service` | `rental-service:8002/metrics` |
+| `analytics-service` | `analytics-service:8003/metrics` |
+| `agentic-service` | `agentic-service:8004/metrics` |
+| `cadvisor` | `cadvisor:8080/metrics` |
 
-Prometheus also loads baseline rules from `monitoring/prometheus/rules/hackspark-alerts.yml`, including:
-
-- recording rules for service request rate and 5xx rate
+Prometheus loads baseline rules from `monitoring/prometheus/rules/hackspark-alerts.yml`:
+- Recording rules for request rate and 5xx rate per service
 - `HacksparkTargetDown`
 - `HacksparkHigh5xxRate`
 
 ### Dashboarding
 
-Grafana is pre-provisioned from the repo with the `Hackspark Overview` dashboard.
+Grafana is pre-provisioned from `monitoring/grafana/` with the `Hackspark Overview` dashboard.
 
 The dashboard includes:
-
-- request rate by service
+- Request rate by service
 - p95 latency by service
-- route-level p95 latency
+- Route-level p95 latency
 - 4xx and 5xx error rate
-- route-level error rate
-- in-flight requests by service
-- Prometheus `up` status for services, Prometheus, and cAdvisor
-- active alert count
-- Prometheus health
-- container CPU usage
-- container memory usage
+- Route-level error rate
+- In-flight requests by service
+- Prometheus `up` status for all services and cAdvisor
+- Active alert count
+- Container CPU and memory usage
 
-Provisioning files live under:
+## Running the Stack
 
-- `monitoring/grafana/provisioning/`
-- `monitoring/grafana/dashboards/`
-
-## Running the stack
-
-Start dev:
-
+Dev (app only, no monitoring):
 ```bash
-docker compose -f docker-compose.yml up --build
+make up-build
 ```
 
-Start prod-style:
-
+Prod (app + monitoring):
 ```bash
 docker compose -f docker-compose.prod.yml up --build
 ```
 
 Useful URLs:
+- Gateway docs: `http://localhost:8000/docs`
+- Gateway metrics: `http://localhost:8000/metrics`
+- Prometheus: only accessible inside the Compose network in prod (no host port exposed)
+- Grafana: `http://localhost:9091` (prod only; default credentials: `admin` / `admin`)
 
-- gateway docs: `http://localhost:8000/docs`
-- gateway metrics: `http://localhost:8000/metrics`
-- Prometheus: `http://localhost:9090`
-- Prometheus targets: `http://localhost:9090/targets`
-- Prometheus alerts: `http://localhost:9090/alerts`
-- Grafana: `http://localhost:3000`
-
-Default Grafana credentials:
-
-- username: `${GRAFANA_ADMIN_USER:-admin}`
-- password: `${GRAFANA_ADMIN_PASSWORD:-admin}`
-
-## Demo workflow
-
-For a judging/demo pass:
+## Demo Workflow
 
 1. Open Grafana and the `Hackspark Overview` dashboard.
-2. Open the gateway docs at `http://localhost:8000/docs`.
-3. Execute a few requests:
-   - `POST /auth/register`
+2. Open `http://localhost:8000/docs`.
+3. Execute a sequence of requests:
+   - `POST /users/register`
    - `POST /users/login`
-   - `GET /auth/me`
-   - `POST /items`
-   - `GET /items`
-   - `POST /ai/chat`
-4. Show the dashboard panels changing in real time.
-5. Trigger one intentional error, such as calling a protected route without a bearer token, and show the error-rate panel move.
-6. Open the Prometheus alerts page and show that baseline alert rules are loaded even if none are firing.
-7. Show one `X-Request-ID` in the logs to connect the UI request with backend telemetry.
+   - `GET /users/me`
+   - `GET /rentals/products`
+   - `GET /analytics/trends`
+   - `POST /chat`
+4. Show dashboard panels changing in real time.
+5. Trigger an intentional error (call a protected route without a bearer token) and show the error-rate panel move.
+6. Show the Prometheus alerts page with baseline rules loaded.
+7. Copy an `X-Request-ID` from the gateway response and find it in the container logs.
 
-## Operational notes
+## Operational Notes
 
-- The gateway is the main demo surface. Start there before inspecting internal services directly.
-- cAdvisor depends on Docker host mounts. In `docker-compose.prod.yml` it also runs with elevated privileges and Docker socket access; keep this only for trusted environments and revisit before hardened production deployment.
-- If the event machine restricts those mounts, the fallback is to keep Prometheus and Grafana running with app metrics only.
-- The current stack provides logging and metrics, not distributed tracing.
-- `/metrics` is intentionally public on the gateway for demo convenience. If this repo is hardened beyond hackathon use, that exposure should be revisited.
+- The gateway is the main demo surface — start there before inspecting internal services.
+- cAdvisor requires Docker host mounts. In `docker-compose.prod.yml` it runs with elevated privileges; keep this only for trusted environments.
+- If the event machine restricts those mounts, Prometheus and Grafana will still work with app metrics only.
+- The current stack provides logging and metrics but not distributed tracing.
+- `/metrics` is public on the gateway for demo convenience — revisit before hardened production use.
 
 ## Verification
 
-When observability code changes, run:
-
+After observability changes:
 ```bash
 make typecheck
 make test
 make check
-make monitoring-smoke
 docker compose -f docker-compose.yml config
 docker compose -f docker-compose.prod.yml config
 ```
 
-Observability-focused tests currently live in:
-
+Observability tests:
 - `tests/unit/test_metrics.py`
 - `tests/unit/test_observability.py`
 - `tests/unit/test_monitoring_assets.py`
 
 ## Quick PromQL
-
-Useful queries when debugging:
 
 ```promql
 up
@@ -299,10 +242,8 @@ sum by(container_label_com_docker_compose_service) (rate(container_cpu_usage_sec
 count(ALERTS{alertstate="firing"})
 ```
 
-## Future extensions
+## Future Extensions
 
-Reasonable next steps after the hackathon:
-
-- propagate `X-Request-ID` explicitly from gateway to downstream service calls
-- add business-level metrics beyond HTTP transport metrics
-- add tracing with OpenTelemetry if the stack grows beyond simple demo needs
+- Propagate `X-Request-ID` explicitly from gateway gRPC calls to downstream servicers
+- Add business-level metrics (Central API call rate, LLM response latency, chat sessions active)
+- OpenTelemetry tracing if the stack grows beyond demo needs

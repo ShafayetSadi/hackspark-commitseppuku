@@ -222,7 +222,7 @@
             "uid": "Prometheus"
           },
           "editorMode": "code",
-          "expr": "up{job=~\"prometheus|api-gateway|auth-service|item-service|ai-agent-service|cadvisor\"}",
+          "expr": "up{job=~\"prometheus|api-gateway|user-service|rental-service|analytics-service|agentic-service|cadvisor\"}",
           "legendFormat": "{{job}}",
           "range": false,
           "refId": "A"

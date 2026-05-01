@@ -5,6 +5,8 @@ import uvicorn
 from fastapi import APIRouter, FastAPI
 
 from shared.app_core.config import CommonSettings
+from shared.app_core.http import install_request_logging
+from shared.app_core.metrics import install_metrics
 
 
 def build_service_app(
@@ -23,6 +25,13 @@ def build_service_app(
         openapi_url="/openapi.json" if settings.service_docs_enabled else None,
     )
     app.state.logger = logger
+    install_metrics(
+        app,
+        settings.service_name,
+        enabled=settings.metrics_enabled,
+        token=settings.metrics_token,
+    )
+    install_request_logging(app, logger)
     app.include_router(router)
     return app
 

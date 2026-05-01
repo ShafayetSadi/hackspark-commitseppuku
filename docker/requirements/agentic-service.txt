@@ -5,6 +5,7 @@ grpcio==1.68.1
 grpcio-health-checking==1.68.1
 motor==3.7.0
 openai==1.58.1
+prometheus-client==0.23.1
 protobuf==5.28.1
 pydantic-settings==2.10.1
 redis==6.4.0

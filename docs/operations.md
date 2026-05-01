@@ -1,275 +1,256 @@
 # Operations
 
-This guide covers runtime behavior, environment variables, Docker operations, migrations, and common troubleshooting steps.
+Runtime behavior, environment variables, Docker operations, migrations, and troubleshooting.
 
 ## Runtime Model
 
-The application is designed to run through Docker Compose:
+The stack runs through Docker Compose:
 
-- `postgres`
-- `auth-service`
-- `ai-agent-service`
-- `item-service`
-- `api-gateway`
+| Container | Role |
+|-----------|------|
+| `postgres` | PostgreSQL 16 — user-service data |
+| `redis` | Redis — agentic-service session store |
+| `user-service` | Auth (HTTP :8001, gRPC :50051) |
+| `rental-service` | Rentals (HTTP :8002, gRPC :50052) |
+| `analytics-service` | Analytics (HTTP :8003, gRPC :50053) |
+| `agentic-service` | AI chat (HTTP :8004, gRPC :50054) |
+| `api-gateway` | Public HTTP entry point (:8000) |
+| `frontend` | Next.js UI (:3000) |
+| `prometheus` | Metrics scraper (:9090) |
+| `grafana` | Dashboards (:3000 on monitoring compose, :3001 in dev) |
 
-The public entrypoint is `api-gateway` on port `8000`. In production it is the only published HTTP service.
+The public entry points are `api-gateway` on port 8000 and `frontend` on port 3000. All other services are accessible only within the Compose network.
 
 ## Start and Stop
 
 Build and start development:
-
 ```bash
-docker compose -f docker-compose.yml up --build
+make up-build
+# or: docker compose up --build
+```
+
+Start without rebuilding:
+```bash
+make up
 ```
 
 Build and start production:
-
 ```bash
 docker compose -f docker-compose.prod.yml up --build
 ```
 
-Stop and remove volumes:
-
+Stop:
 ```bash
-docker compose -f docker-compose.yml down -v
+make down
 ```
 
-Check status:
+Stop and remove volumes:
+```bash
+make down-v
+```
 
+Check container status:
 ```bash
 docker compose ps
 ```
 
-Stream logs:
-
+Stream all logs:
 ```bash
 docker compose logs -f
 ```
 
-## Observability
-
-All services now emit structured JSON request logs. Each request gets:
-
-- `request_started`
-- `request_completed`
-- `request_failed` for unhandled exceptions
-
-The logging middleware also adds `X-Request-ID` to successful responses so request traces can be correlated across logs and clients.
-
-Current request logs record query parameter names via `query_keys`, but not raw query values, to reduce accidental leakage of sensitive data.
-
-For the full logging and monitoring setup, including Prometheus, Grafana, cAdvisor, and demo workflow, see [observability.md](./observability.md).
+Stream one service:
+```bash
+docker compose logs -f api-gateway
+docker compose logs -f user-service
+docker compose logs -f agentic-service
+```
 
 ## Environment Variables
 
-Primary variables from `.env`:
+All variables come from `.env` (copy from `.env.example`).
 
-- `POSTGRES_USER`
-- `POSTGRES_PASSWORD`
-- `POSTGRES_DB`
-- `JWT_SECRET`
-- `JWT_ALGORITHM`
-- `ACCESS_TOKEN_EXPIRE_MINUTES`
-- `AUTH_SERVICE_URL`
-- `ITEM_SERVICE_URL`
-- `AI_AGENT_SERVICE_URL`
+**Required:**
 
-Service-specific runtime variables also include:
+| Variable | Description |
+|----------|-------------|
+| `CENTRAL_API_TOKEN` | Team token for the Central API — never commit this |
+| `JWT_SECRET` | Secret for JWT signing — use a long random string |
 
-- `DATABASE_BACKEND`
-- `POSTGRES_HOST`
-- `POSTGRES_PORT`
-- `SQLITE_PATH`
+**Database:**
+
+| Variable | Default |
+|----------|---------|
+| `POSTGRES_USER` | `hackathon` |
+| `POSTGRES_PASSWORD` | `hackathon` |
+| `POSTGRES_DB` | `hackathon` |
+
+**Service configuration:**
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `CENTRAL_API_URL` | `https://technocracy.brittoo.xyz` | Central API base URL |
+| `CENTRAL_API_RATE_LIMIT` | `20` | Max req/min per service process |
+| `LLM_PROVIDER` | `mock` | `mock` / `gemini` / `openai` / `groq` |
+| `GEMINI_API_KEY` | — | Required if `LLM_PROVIDER=gemini` |
+| `OPENAI_API_KEY` | — | Required if `LLM_PROVIDER=openai` |
+| `GROQ_API_KEY` | — | Required if `LLM_PROVIDER=groq` |
+| `APP_ENV` | `dev` | `dev` or `prod` |
+| `LOG_LEVEL` | `INFO` | Logging verbosity |
+| `GATEWAY_PORT` | `8000` | Gateway HTTP port |
+| `FRONTEND_PORT` | `3000` | Frontend HTTP port |
+
+**Observability (optional):**
+
+| Variable | Description |
+|----------|-------------|
+| `METRICS_ENABLED` | `true`/`false` — enable `/metrics` endpoint |
+| `METRICS_TOKEN` | Protect `/metrics` with a bearer token |
 
 ## Health Checks
 
-Docker Compose health checks are configured for:
+Docker Compose health checks are configured for all services:
 
-- `postgres` via `pg_isready`
-- `auth-service` via `GET /health`
-- `item-service` via `GET /health`
-- `ai-agent-service` via `GET /health`
-- `api-gateway` via `GET /health`
+| Service | Check |
+|---------|-------|
+| `postgres` | `pg_isready` |
+| `redis` | `redis-cli ping` |
+| `user-service` | `GET http://localhost:8001/status` |
+| `rental-service` | `GET http://localhost:8002/status` |
+| `analytics-service` | `GET http://localhost:8003/status` |
+| `agentic-service` | `GET http://localhost:8004/status` |
+| `api-gateway` | `GET http://localhost:8000/health` |
+| `frontend` | `GET http://localhost:3000/api/status` |
 
-The gateway waits for dependent services to report healthy before starting fully.
+The gateway waits for all downstream services to be healthy before accepting traffic.
+
+## Observability
+
+All services emit structured JSON logs. See [observability.md](./observability.md) for the full setup including Prometheus, Grafana, and request correlation.
+
+App metrics are exposed at:
+- gateway: `http://localhost:8000/metrics`
+- internal services: scraped over the Compose network
 
 ## Database Operations
 
-### Current strategy
+Only user-service writes to PostgreSQL. The `users` table is managed by Alembic.
 
-The current scaffold uses Alembic revision files as the only schema source of truth. Service startup validates the migrated schema and fails loudly when required tables or columns are missing.
-
-### Manual migration commands
-
-Auth service:
-
+Apply migrations:
 ```bash
-make migrate-auth
+make migrate-user
 ```
 
-Auth service autogenerate:
-
+Autogenerate a new migration:
 ```bash
-make revision-auth MSG=add_user_profile_fields
+make revision-user MSG=describe_the_change
 ```
 
-Auth service migration check:
-
+Check migration state:
 ```bash
-make alembic-check-auth
+make alembic-check
 ```
 
-Auth service rollback:
-
+Roll back one migration:
 ```bash
-make downgrade-auth
+make downgrade REV=-1
 ```
 
-Item service:
-
+Roll back to base:
 ```bash
-make migrate-items
+make downgrade REV=base
 ```
 
-Item service autogenerate:
-
-```bash
-make revision-items MSG=add_item_status
-```
-
-Item service migration check:
-
-```bash
-make alembic-check-items
-```
-
-Item service rollback:
-
-```bash
-make downgrade-items
-```
-
-Override the revision target when needed:
-
-```bash
-make downgrade-auth REV=base
-make downgrade-items REV=0001_create_items
-```
-
-Always review autogenerate output before running `make migrate-auth` or `make migrate-items`.
-If `alembic revision --autogenerate` fails with "Target database is not up to date", run the matching migrate target and `make alembic-check-auth` or `make alembic-check-items` before retrying.
+Always review autogenerated migration files before applying. Test reversibility: upgrade → downgrade → upgrade.
 
 ## Docker Build Model
 
-Each service Dockerfile:
+Each service Dockerfile uses two stages:
+1. Builder: installs dependencies from the root `uv.lock` (production only).
+2. Runtime: copies venv and source, runs the service.
 
-- syncs dependencies from the root `uv.lock`
-- installs only production dependencies
-- sets `PYTHONPATH=/app`
-- starts the service with `uvicorn` or a shell bootstrap script
-
-This keeps local development and container builds aligned on one locked dependency graph.
+Frontend Dockerfile:
+1. Deps: install `package.json`.
+2. Builder: `npm run build` (Next.js compilation).
+3. Runner: `gcr.io/distroless/nodejs22` (hardened).
 
 ## Operational Checks Before Demo
 
-Run these checks before presenting:
-
 1. `uv sync`
 2. `make check`
-3. `docker compose -f docker-compose.yml up --build`
-4. `make monitoring-smoke`
-5. Verify `http://localhost:8000/docs`
-6. Register a user
-7. Create an item
-8. Call the AI chat endpoint
+3. `make up-build`
+4. Verify `http://localhost:8000/docs`
+5. Verify `http://localhost:3000` (frontend)
+6. Register a user and log in
+7. Hit `/rentals/products` and `/analytics/trends`
+8. Send a chat message
+9. Check `http://localhost:8000/status` for all services green
 
 ## Common Issues
 
-### `uv` cache permission errors
+### Gateway returns `401`
 
-In restricted environments, use:
+- Verify the request includes `Authorization: Bearer <token>`.
+- Token may be expired — log in again.
+- All services must share the same `JWT_SECRET`.
+
+### Gateway returns `502`
+
+A downstream gRPC service is unreachable. Check:
+```bash
+docker compose logs -f user-service
+docker compose logs -f rental-service
+docker compose logs -f analytics-service
+docker compose logs -f agentic-service
+```
+
+### Gateway returns `503`
+
+The Central API rate limit was exceeded. The `CentralAPIClient` retried 3 times with backoff and gave up. Check that `CENTRAL_API_RATE_LIMIT=20` is set and no service is spamming requests.
+
+### Gateway returns `504`
+
+A downstream service timed out. Check:
+- Is the service healthy (`docker compose ps`)?
+- Is it blocked on a slow Central API call or LLM response?
+
+### agentic-service fails to start
+
+Verify Redis is healthy:
+```bash
+docker compose ps redis
+docker compose logs redis
+```
+
+### user-service fails on startup
+
+- Check that PostgreSQL is healthy and `POSTGRES_*` credentials in `.env` match `docker-compose.yml`.
+- Check that migrations have been applied (`make migrate-user`).
+
+### `uv` cache permission errors
 
 ```bash
 UV_CACHE_DIR=/tmp/uv-cache uv sync
 ```
 
-You can apply the same pattern to `uv run` commands.
+### Type checking shows unresolved imports
 
-### Gateway returns `401`
+Use the per-service commands from `make typecheck`. Each service has its own `ty.toml` with the correct import root.
 
-Check:
+## Monitoring Stack
 
-- the request includes `Authorization: Bearer <token>`
-- the token was issued by the current running stack
-- all services share the same `JWT_SECRET`
-
-### Gateway returns `502`
-
-This usually means an upstream service is down or returning a server error. Inspect:
-
-```bash
-docker compose logs -f auth-service
-docker compose logs -f item-service
-docker compose logs -f ai-agent-service
-```
-
-### Gateway returns `504`
-
-This means the upstream service did not respond before the proxy timeout. Check:
-
-- whether the downstream service is healthy
-- whether the route is blocked on a slow database or external API call
-- whether the request is waiting on an LLM or other network dependency
-
-### Auth or item service fails on startup
-
-Check:
-
-- PostgreSQL health status
-- database credentials in `.env`
-- whether the container can reach `postgres`
-
-## Monitoring stack
-
-The dev and prod Compose files include:
-
-- Prometheus on `http://localhost:9090`
-- Grafana on `http://localhost:3000`
+The Compose files include:
+- Prometheus on `http://localhost:9090` (prod compose only — no host port in dev)
+- Grafana on `http://localhost:9091` (prod compose only)
 - cAdvisor scraped internally by Prometheus
-- baseline Prometheus alert rules loaded from `monitoring/prometheus/rules/hackspark-alerts.yml`
+- Baseline alert rules from `monitoring/prometheus/rules/hackspark-alerts.yml`
 
-Security note:
-
-- In `docker-compose.prod.yml`, `cadvisor` requires elevated host access (`privileged: true`, Docker socket, and host mounts).
-- Keep this as an intentional observability tradeoff for trusted environments; do not treat it as a hardened production baseline without additional controls.
-
-App metrics are exposed at:
-
-- gateway: `http://localhost:8000/metrics`
-- auth service: `http://auth-service:8000/metrics` on the Compose network
-- item service: `http://item-service:8000/metrics` on the Compose network
-- AI service: `http://ai-agent-service:8000/metrics` on the Compose network
-- Prometheus itself: `http://localhost:9090/metrics`
-
-Metrics endpoint controls:
-
-- `METRICS_ENABLED=false` disables `/metrics` on app services
-- `METRICS_TOKEN=<token>` protects `/metrics` and requires Prometheus scrape configs to send the same token
-
-If `METRICS_TOKEN` is set but scrape configs are not updated, Prometheus will receive `401` responses for app targets.
-
-The default Grafana dashboard is `Hackspark Overview`. It is provisioned from the repo and should appear automatically on startup. It now includes route-level latency/error panels, in-flight requests, Prometheus health, and active alert count in addition to the original service and container views.
-
-### Type checking shows unresolved `app.*` imports
-
-Use the repo targets from `make typecheck`. They intentionally run `ty` per service because each service has its own import root and `ty.toml`.
+Security note: `docker-compose.prod.yml` runs `cadvisor` with elevated host access (`privileged: true`, Docker socket). This is an intentional observability tradeoff; do not treat it as a hardened production baseline.
 
 ## Future Hardening Ideas
 
-After the hackathon, consider:
-
-- separate databases per service
-- dedicated migration job instead of startup bootstrapping
-- centralized metrics and tracing
-- secret management beyond `.env`
-- replacing the mock AI backend with a real provider abstraction
+- Distributed rate limiting for Central API (shared Redis counter across service replicas)
+- Separate PostgreSQL schemas or databases per service
+- Dedicated migration job instead of startup bootstrapping
+- Secret management beyond `.env`
+- OpenTelemetry for distributed tracing

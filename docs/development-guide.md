@@ -1,153 +1,213 @@
 # Development Guide
 
-This guide explains how to work on the repository locally with `uv`, `ruff`, `ty`, and Docker.
+How to work on this repository locally with `uv`, `ruff`, `ty`, Docker, and the gRPC toolchain.
 
 ## Prerequisites
 
-- Python `3.12`
+- Python 3.12
 - `uv`
 - Docker and Docker Compose v2 (`docker compose`)
+- Node 22 + npm (for frontend work only)
 
 ## First-Time Setup
 
-1. Copy the environment file.
+1. Copy the environment file and fill in required values:
 
 ```bash
 cp .env.example .env
 ```
 
-2. Sync the project environment.
+Required values to set:
+- `CENTRAL_API_TOKEN` — obtain from the hackathon judges
+- `JWT_SECRET` — any long random string
+
+2. Sync the Python environment:
 
 ```bash
 uv sync
 ```
 
-3. Start the stack.
+3. Start the full stack:
 
 ```bash
-docker compose -f docker-compose.yml up --build
+make up-build
 ```
 
-4. Open the gateway Swagger UI.
+Or equivalently:
+```bash
+docker compose up --build
+```
+
+4. Open the gateway Swagger UI:
 
 ```text
 http://localhost:8000/docs
 ```
 
+5. Run migrations (already applied on first `up-build` via container startup, but useful for local dev):
+
+```bash
+make migrate-user
+```
+
 ## Daily Commands
 
-Install or refresh dependencies:
+| Command | What it does |
+|---------|-------------|
+| `make up` | Start the full stack |
+| `make up-build` | Start with rebuild |
+| `make down` | Stop the stack |
+| `make down-v` | Stop and wipe volumes |
+| `make format` | Run ruff formatter |
+| `make lint` | Run ruff linter |
+| `make typecheck` | Run ty on all packages |
+| `make test` | Run pytest |
+| `make check` | format + lint + typecheck + test |
+| `make proto` | Regenerate gRPC stubs from `proto/` |
+| `make migrate-user` | Apply user-service Alembic migrations |
+| `make revision-user MSG=<desc>` | Autogenerate a new migration |
+| `make alembic-check` | Verify migration state |
+| `make downgrade REV=-1` | Roll back one migration |
 
+Run a single test:
 ```bash
-uv sync
-```
-
-Format the codebase:
-
-```bash
-make format
-```
-
-Run lint checks:
-
-```bash
-make lint
-```
-
-Run type checks:
-
-```bash
-make typecheck
-```
-
-Run gateway smoke tests:
-
-```bash
-make test
-```
-
-Run the full local quality gate:
-
-```bash
-make check
-```
-
-Start the containers:
-
-```bash
-make up
-```
-
-Stop the containers and remove volumes:
-
-```bash
-make down-v
+uv run python -m pytest tests/path/to/test_file.py::test_name
 ```
 
 ## Repository Conventions
 
 ### Python environment
 
-- The repository uses a single root `pyproject.toml` and `uv.lock`.
-- Local development uses `.venv/` created by `uv sync`.
-- Docker images reuse the same locked dependency set, but install only production dependencies.
+- Single root `pyproject.toml` and `uv.lock`.
+- Local dev uses `.venv/` created by `uv sync`.
+- Docker images install from the same locked dependency set (production deps only).
+
+### Python package layout
+
+Each service has its own package under its folder:
+
+```
+api-gateway/gateway/
+user-service/auth_service/
+rental-service/rental_service/
+analytics-service/analytics_service/
+agentic-service/ai_agent_service/
+```
 
 ### Formatting and linting
 
-- `ruff` handles formatting and linting.
-- Import ordering is enforced by `ruff`, so let the formatter fix import blocks rather than editing them manually for style.
+- `ruff` handles both formatting and linting.
+- Let the formatter fix import ordering; do not edit import blocks manually for style.
 
 ### Type checking
 
-- `ty` is configured per service because every microservice uses an `app` package as its import root.
-- Do not collapse all services into one global type-check command unless the package layout changes.
+- `ty` is configured per service because each service has its own import root and `ty.toml`.
+- Per-service commands:
+
+```bash
+uv run ty check shared
+uv run --directory api-gateway ty check gateway
+uv run --directory user-service ty check auth_service
+uv run --directory agentic-service ty check ai_agent_service
+```
+
+`rental-service` and `analytics-service` are not yet in the typecheck target — add them when their code becomes non-trivial.
+
+### gRPC stubs
+
+Generated stubs live in `shared/grpc_gen/` and are committed to the repo. After editing any `.proto` file, regenerate with:
+
+```bash
+make proto
+```
+
+Always import stubs as:
+```python
+from shared.grpc_gen import user_pb2, user_pb2_grpc
+```
 
 ### Shared code
 
-- Only cross-cutting primitives belong in `shared/app_core`.
-- Business logic should stay inside each service unless it is truly generic.
+- Only cross-cutting infrastructure belongs in `shared/app_core/`.
+- Domain logic stays inside each service.
+- Services must not import from other services; use gRPC for cross-service calls.
 
-### Service boundaries
+### Central API
 
-- Route modules should stay thin and handle HTTP concerns only.
-- Service modules should own use-case logic and should avoid raising framework-specific exceptions unless there is a strong reason.
-- Shared HTTP behavior such as request logging should live in reusable infrastructure helpers, not be reimplemented per service.
+Never call the Central API directly. Always use `CentralAPIClient`:
 
-## How To Add a New Feature
+```python
+from shared.app_core.central_api import CentralAPIClient
 
-1. Start at the gateway contract:
-   Decide whether the feature should be exposed publicly or stay internal.
-2. Update the appropriate downstream service:
-   Add schemas, service logic, and routes inside that service.
-3. Update persistence if needed:
-   Add or modify the SQLAlchemy model and migration.
-4. Expose the route through the gateway if the service is externally reachable.
-5. Update docs:
-   At minimum, update `docs/api-documentation.md` and any architecture notes affected by the change.
-6. Run `make check`.
+client = CentralAPIClient(settings.central_api_url, settings.central_api_token)
+data = await client.get("/api/data/products", params={"category": "TOOLS"})
+```
 
-## How To Add a New Microservice
+This client enforces the 20 req/min rate limit and handles retries.
 
-1. Copy the layout of `services/item-service/`.
-2. Add the new service to `docker-compose.yml`.
-3. Add a Dockerfile that syncs from the root `uv.lock`.
-4. Add a local `ty.toml` file if the service uses `app` as its import package.
-5. Add gateway routes and a service URL environment variable if the service should be reachable through the gateway.
-6. Document the new service in `docs/architecture.md` and `docs/api-documentation.md`.
+## How to Add a New gRPC Endpoint
 
-## Database Development Notes
+1. Add the RPC to the relevant `.proto` file in `proto/`.
+2. Run `make proto` to regenerate stubs.
+3. Implement the method in the service's `grpc_service.py`.
+4. Add the corresponding HTTP route in `api-gateway/gateway/api/routes.py`.
+5. Update `docs/api-documentation.md`.
 
-- PostgreSQL is the default runtime database.
-- SQLite fallback exists for simplicity, but team development should prefer PostgreSQL to stay aligned with Docker and async behavior.
-- Auth and item services include Alembic scaffolding and startup schema validation.
-- If the schema starts changing frequently, rely on Alembic revisions instead of implicit startup table creation.
+## How to Add or Change a Service
+
+When scaffolding or modifying any service, update **all** of:
+
+- `proto/` (add/modify proto file, run `make proto`)
+- `docker-compose.yml` and `docker-compose.prod.yml`
+- `api-gateway/gateway/api/routes.py`
+- `api-gateway/gateway/core/config.py`
+- `Makefile` typecheck target
+- `pyproject.toml` `[tool.ty.environment].extra-paths`
+- `.env.example` for any new env vars
+- `CLAUDE.md` (AGENTS.md section)
+
+## Database Development
+
+- PostgreSQL is the only runtime database (user-service only).
+- Schema is owned by Alembic. Service startup validates the migrated schema and fails loudly on drift.
+- Never put non-auth data in Postgres. Product and rental data comes from the Central API.
+
+Migration workflow:
+```bash
+make revision-user MSG=describe_the_change   # autogenerate
+make migrate-user                            # apply
+make downgrade REV=-1                        # roll back one
+```
+
+Always review autogenerated files before applying. Run upgrade → downgrade → upgrade to verify reversibility.
+
+## LLM Provider Selection
+
+Set `LLM_PROVIDER` in `.env`:
+- `mock` — no API key required (default, recommended for dev)
+- `gemini` — requires `GEMINI_API_KEY`
+- `openai` — requires `OPENAI_API_KEY`
+- `groq` — requires `GROQ_API_KEY`
 
 ## Local Troubleshooting
 
-If `uv` fails with a cache permission error in constrained environments, use a writable cache directory:
-
+**`uv` cache permission errors:**
 ```bash
 UV_CACHE_DIR=/tmp/uv-cache uv sync
 ```
 
-If type checking fails with unresolved `app.*` imports, verify you are running the per-service command from `make typecheck` and that the local `ty.toml` file for that service still exists.
+**Type checking fails with unresolved imports:**
+
+Verify you are using the per-service command from `make typecheck` and that the local `ty.toml` still exists in the service directory.
+
+**gRPC stubs not found:**
+
+Run `make proto` to regenerate `shared/grpc_gen/`. Commit the generated files.
+
+**agentic-service fails to start:**
+
+Check that Redis is running and healthy:
+```bash
+docker compose ps redis
+docker compose logs redis
+```
