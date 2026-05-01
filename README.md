@@ -67,7 +67,7 @@ docker compose up --build
 ### With monitoring (Prometheus + Grafana)
 
 ```bash
-docker compose -f docker-compose.prod.yml up --build
+docker compose up --build
 ```
 
 | Tool | URL |
