@@ -46,7 +46,7 @@ type ToastState = {
   tone: ToastTone;
 } | null;
 
-const APP_HREF = "/app";
+const APP_HREF = "/products";
 const HOME_HREF = "/";
 
 const isEmail = (value: string): boolean =>
@@ -567,6 +567,10 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
       });
 
       if (!response.ok) {
+        if (response.status === 401) {
+          showToast("Invalid email or password. Please try again.", "error");
+          return;
+        }
         const message = await readErrorMessage(
           response,
           "Sign in failed. Check your credentials and try again.",
@@ -620,13 +624,20 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          full_name: fullName,
+          name: fullName,
           email: regEmail,
           password: regPassword,
         }),
       });
 
       if (!response.ok) {
+        if (response.status === 409) {
+          showToast(
+            "An account with this email already exists. Try signing in instead.",
+            "error",
+          );
+          return;
+        }
         const message = await readErrorMessage(
           response,
           "Could not create your account. Please try again.",

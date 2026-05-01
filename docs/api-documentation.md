@@ -17,7 +17,7 @@ The public client should usually call the API Gateway, not the individual servic
 - Public routes:
   - `GET /health`
   - `POST /auth/register`
-  - `POST /auth/login`
+  - `POST /users/login`
 - Protected routes:
   - `GET /auth/me`
   - `GET /items`
@@ -83,7 +83,7 @@ Response:
 ### Auth Proxy
 
 - `POST /auth/register`
-- `POST /auth/login`
+- `POST /users/login`
 - `GET /auth/me`
 
 ### Item Proxy
@@ -137,7 +137,7 @@ Possible errors:
 - `409` if the email already exists
 - `422` if validation fails
 
-### POST /auth/login
+### POST /users/login
 
 Authenticates a user and returns a bearer token.
 

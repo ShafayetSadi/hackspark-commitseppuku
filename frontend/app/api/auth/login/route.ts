@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
   let upstreamResponse: Response;
 
   try {
-    upstreamResponse = await fetch(`${getGatewayUrl()}/auth/login`, {
+    upstreamResponse = await fetch(`${getGatewayUrl()}/users/login`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",

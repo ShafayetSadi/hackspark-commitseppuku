@@ -93,7 +93,7 @@ Important files:
 
 Notes:
 
-- `/auth/register`, `/auth/login`, and `/health` are treated as public.
+- `/auth/register`, `/users/login`, and `/health` are treated as public.
 - Protected routes require a bearer token validated with the shared JWT secret.
 - Forwarding now includes explicit timeout and upstream-network failure handling in `gateway/gateway/services/proxy.py`.
 - Request logging is centralized through `shared/app_core/http.py`.

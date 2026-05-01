@@ -9,17 +9,33 @@ import {
 } from "@/lib/auth-service";
 
 export async function POST(request: NextRequest) {
-  const payload = await request.json();
+  const rawPayload = (await request.json()) as {
+    name?: unknown;
+    full_name?: unknown;
+    email?: unknown;
+    password?: unknown;
+  };
+
+  const normalizedPayload = {
+    full_name:
+      typeof rawPayload.name === "string" && rawPayload.name.trim().length > 0
+        ? rawPayload.name.trim()
+        : typeof rawPayload.full_name === "string"
+          ? rawPayload.full_name
+          : "",
+    email: typeof rawPayload.email === "string" ? rawPayload.email : "",
+    password: typeof rawPayload.password === "string" ? rawPayload.password : "",
+  };
 
   let upstreamResponse: Response;
 
   try {
-    upstreamResponse = await fetch(`${getGatewayUrl()}/auth/register`, {
+    upstreamResponse = await fetch(`${getGatewayUrl()}/users/register`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(normalizedPayload),
       cache: "no-store",
     });
   } catch {
