@@ -29,7 +29,7 @@ class FakeLogger:
         self.records.append(("exception", event, fields))
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_request_logging_propagates_request_id_and_redacts_query_values():
     logger = FakeLogger()
     app = FastAPI()
@@ -68,7 +68,7 @@ async def test_request_logging_propagates_request_id_and_redacts_query_values():
     assert "query" not in logger.records[0][2]
 
 
-@pytest.mark.anyio
+@pytest.mark.asyncio
 async def test_request_logging_returns_request_id_on_internal_error():
     logger = FakeLogger()
     app = FastAPI()

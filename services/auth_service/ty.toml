@@ -1,9 +1,0 @@
-[environment]
-python-version = "3.12"
-root = ["."]
-extra-paths = ["../.."]
-
-[terminal]
-error-on-warning = true
-output-format = "concise"
-

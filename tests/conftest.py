@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import importlib
 import os
 import sqlite3
 import sys
-from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 from types import SimpleNamespace
@@ -17,98 +15,65 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def clear_service_modules() -> None:
-    for module_name in list(sys.modules):
-        if (
-            module_name == "app"
-            or module_name.startswith("app.")
-            or module_name == "gateway"
-            or module_name.startswith("gateway.")
-            or module_name == "auth_service"
-            or module_name.startswith("auth_service.")
-            or module_name == "ai_agent_service"
-            or module_name.startswith("ai_agent_service.")
-            or module_name == "shared.app_core"
-            or module_name.startswith("shared.app_core.")
-        ):
-            sys.modules.pop(module_name, None)
+    prefixes = (
+        "auth_service",
+        "rental_service",
+        "analytics_service",
+        "ai_agent_service",
+        "gateway",
+        "shared.app_core",
+    )
+    for mod in list(sys.modules):
+        if any(mod == p or mod.startswith(f"{p}.") for p in prefixes):
+            sys.modules.pop(mod, None)
 
 
 @contextmanager
-def service_environment(service_dir: Path, env: dict[str, str]) -> Iterator[None]:
-    previous_values = {key: os.environ.get(key) for key in env}
-    previous_sys_path = list(sys.path)
+def service_environment(service_dir: Path, env: dict[str, str]):
+    prev_env = {k: os.environ.get(k) for k in env}
+    prev_path = list(sys.path)
 
-    sys.path.insert(0, str(service_dir))
     sys.path.insert(0, str(ROOT))
+    sys.path.insert(0, str(service_dir))
     os.environ.update(env)
     clear_service_modules()
     try:
         yield
     finally:
         clear_service_modules()
-        sys.path[:] = previous_sys_path
-        for key, value in previous_values.items():
-            if value is None:
-                os.environ.pop(key, None)
+        sys.path[:] = prev_path
+        for k, v in prev_env.items():
+            if v is None:
+                os.environ.pop(k, None)
             else:
-                os.environ[key] = value
+                os.environ[k] = v
 
 
 def load_runtime(
-    service_path: Path,
-    env: dict[str, str],
-    modules_to_load: dict[str, str],
+    service_path: Path, env: dict[str, str], modules: dict[str, str]
 ) -> SimpleNamespace:
-    modules: dict[str, object] = {}
+    loaded: dict[str, object] = {}
     with service_environment(service_path, env):
-        for alias, module_name in modules_to_load.items():
-            modules[alias] = importlib.import_module(module_name)
-    return SimpleNamespace(**modules)
+        import importlib
+
+        for alias, mod_name in modules.items():
+            loaded[alias] = importlib.import_module(mod_name)
+    return SimpleNamespace(**loaded)
 
 
 def prepare_auth_database(database_path: str) -> None:
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            """
-            CREATE TABLE users (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                email VARCHAR(255) NOT NULL,
-                full_name VARCHAR(255) NOT NULL,
-                hashed_password VARCHAR(255) NOT NULL
-            )
-            """
+    with sqlite3.connect(database_path) as conn:
+        conn.execute(
+            "CREATE TABLE users ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "email VARCHAR(255) NOT NULL,"
+            "full_name VARCHAR(255) NOT NULL,"
+            "hashed_password VARCHAR(255) NOT NULL)"
         )
-        connection.execute("CREATE UNIQUE INDEX ix_users_email ON users (email)")
-        connection.execute("CREATE TABLE alembic_version_auth (version_num VARCHAR(32) NOT NULL)")
-        connection.execute(
-            "INSERT INTO alembic_version_auth (version_num) VALUES ('0001_create_users')"
-        )
-        connection.commit()
-
-
-def prepare_item_database(database_path: str) -> None:
-    with sqlite3.connect(database_path) as connection:
-        connection.execute(
-            """
-            CREATE TABLE items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name VARCHAR(255) NOT NULL,
-                category VARCHAR(100) NOT NULL,
-                quantity INTEGER NOT NULL DEFAULT 0,
-                created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-            )
-            """
-        )
-        connection.execute("CREATE INDEX ix_items_category ON items (category)")
-        connection.execute(
-            "CREATE INDEX ix_items_category_created_at ON items (category, created_at)"
-        )
-        connection.execute("CREATE INDEX ix_items_name ON items (name)")
-        connection.execute("CREATE TABLE alembic_version_item (version_num VARCHAR(32) NOT NULL)")
-        connection.execute(
-            "INSERT INTO alembic_version_item (version_num) VALUES ('0001_create_items')"
-        )
-        connection.commit()
+        conn.execute("CREATE UNIQUE INDEX ix_users_email ON users (email)")
+        conn.execute("CREATE TABLE alembic_version_auth (version_num VARCHAR(32) NOT NULL)")
+        conn.execute("INSERT INTO alembic_version_auth VALUES ('0001_create_users')")
+        conn.commit()
 
 
 class AsyncSessionAdapter:
@@ -139,6 +104,9 @@ def build_sync_session_factory(database_path: str):
     return sessionmaker(bind=engine, expire_on_commit=False, autoflush=False)
 
 
+# ── Fixtures ──────────────────────────────────────────────────────────────────
+
+
 @pytest.fixture
 def auth_env(tmp_path) -> dict[str, str]:
     return {
@@ -150,31 +118,12 @@ def auth_env(tmp_path) -> dict[str, str]:
 
 
 @pytest.fixture
-def item_env(tmp_path) -> dict[str, str]:
-    return {
-        "APP_ENV": "dev",
-        "DATABASE_BACKEND": "sqlite",
-        "SQLITE_PATH": str(tmp_path / "items.db"),
-        "JWT_SECRET": "test-secret",
-    }
-
-
-@pytest.fixture
 def ai_env() -> dict[str, str]:
     return {
         "APP_ENV": "dev",
         "JWT_SECRET": "test-secret",
-    }
-
-
-@pytest.fixture
-def gateway_env() -> dict[str, str]:
-    return {
-        "APP_ENV": "prod",
-        "JWT_SECRET": "test-secret",
-        "AUTH_SERVICE_URL": "http://auth-service:8000",
-        "ITEM_SERVICE_URL": "http://item-service:8000",
-        "AI_AGENT_SERVICE_URL": "http://ai-agent-service:8000",
+        "LLM_PROVIDER": "mock",
+        "MONGO_URI": "mongodb://localhost:27017/test",
     }
 
 
@@ -182,13 +131,12 @@ def gateway_env() -> dict[str, str]:
 def auth_runtime(auth_env):
     prepare_auth_database(auth_env["SQLITE_PATH"])
     runtime = load_runtime(
-        ROOT / "services" / "auth_service",
+        ROOT / "user-service",
         auth_env,
         {
             "api_dependencies": "auth_service.api.dependencies",
             "api_routes": "auth_service.api.routes",
             "core_config": "auth_service.core.config",
-            "main": "auth_service.main",
             "schemas": "auth_service.schemas.auth",
         },
     )
@@ -197,44 +145,42 @@ def auth_runtime(auth_env):
 
 
 @pytest.fixture
-def item_runtime(item_env):
-    prepare_item_database(item_env["SQLITE_PATH"])
-    runtime = load_runtime(
-        ROOT / "services" / "item-service",
-        item_env,
+def ai_runtime(ai_env):
+    return load_runtime(
+        ROOT / "agentic-service",
+        ai_env,
         {
-            "api_routes": "app.api.routes",
-            "core_config": "app.core.config",
-            "main": "app.main",
-            "schemas": "app.schemas.item",
+            "core_config": "ai_agent_service.core.config",
+            "schemas": "ai_agent_service.schemas.chat",
+            "chat_service": "ai_agent_service.services.chat_service",
+            "llm_factory": "ai_agent_service.services.llm.factory",
+            "rag_retriever": "ai_agent_service.services.rag.retriever",
+            "rag_relevance": "ai_agent_service.services.rag.relevance",
+            "rag_context": "ai_agent_service.services.rag.context_builder",
         },
     )
-    runtime.session_factory = build_sync_session_factory(item_env["SQLITE_PATH"])
-    return runtime
 
 
 @pytest.fixture
-def ai_runtime(ai_env):
-    return load_runtime(
-        ROOT / "services" / "ai_agent_service",
-        ai_env,
-        {
-            "api_routes": "ai_agent_service.api.routes",
-            "core_config": "ai_agent_service.core.config",
-            "main": "ai_agent_service.main",
-            "schemas": "ai_agent_service.schemas.chat",
-        },
-    )
+def gateway_env() -> dict[str, str]:
+    return {
+        "APP_ENV": "dev",
+        "JWT_SECRET": "test-secret",
+        "USER_SERVICE_ADDR": "localhost:50051",
+        "RENTAL_SERVICE_ADDR": "localhost:50052",
+        "ANALYTICS_SERVICE_ADDR": "localhost:50053",
+        "AGENTIC_SERVICE_ADDR": "localhost:50054",
+    }
 
 
 @pytest.fixture
 def gateway_runtime(gateway_env):
     return load_runtime(
-        ROOT / "gateway",
+        ROOT / "api-gateway",
         gateway_env,
         {
-            "api_routes": "gateway.api.routes",
-            "core_config": "gateway.core.config",
             "main": "gateway.main",
+            "core_config": "gateway.core.config",
+            "api_routes": "gateway.api.routes",
         },
     )

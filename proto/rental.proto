@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package rental;
+
+service RentalService {
+  rpc ListProducts(ProductsQuery) returns (ProductsResponse);
+  rpc GetProduct(GetProductRequest) returns (ProductResponse);
+}
+
+message ProductsQuery {
+  string category = 1;
+  string page = 2;
+  string limit = 3;
+}
+
+message GetProductRequest {
+  int32 product_id = 1;
+}
+
+// JSON payload forwarded verbatim from Central API
+message ProductsResponse {
+  string json_data = 1;
+}
+
+message ProductResponse {
+  string json_data = 1;
+}

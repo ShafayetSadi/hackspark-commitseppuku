@@ -1,0 +1,27 @@
+syntax = "proto3";
+
+package analytics;
+
+service AnalyticsService {
+  rpc GetTrends(TrendsRequest) returns (AnalyticsResponse);
+  rpc GetSurge(SurgeRequest) returns (AnalyticsResponse);
+  rpc GetRecommendations(RecommendationsRequest) returns (AnalyticsResponse);
+}
+
+message TrendsRequest {
+  string category = 1;
+}
+
+message SurgeRequest {
+  string category = 1;
+}
+
+message RecommendationsRequest {
+  string category = 1;
+  int32 limit = 2;
+}
+
+// JSON payload containing computed analytics
+message AnalyticsResponse {
+  string json_data = 1;
+}

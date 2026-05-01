@@ -74,7 +74,7 @@ async def test_end_to_end_flow(
     register_request = build_request(
         "/auth/register",
         method="POST",
-        body={"email": "team@example.com", "password": "password123", "full_name": "Hack Team"},
+        body={"email": "team@example.com", "password": "password123", "name": "Hack Team"},
     )
     register_response = await gateway_runtime.api_routes.auth_proxy(
         "register",

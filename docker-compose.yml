@@ -5,24 +5,28 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-hackathon}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-hackathon}
       POSTGRES_DB: ${POSTGRES_DB:-hackathon}
-    ports:
-      - "5434:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-hackathon} -d ${POSTGRES_DB:-hackathon}",
-        ]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-hackathon} -d ${POSTGRES_DB:-hackathon}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
-  auth-service:
+  mongodb:
+    image: mongo:7-jammy
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  user-service:
     build:
       context: .
-      dockerfile: services/auth_service/Dockerfile
+      dockerfile: user-service/Dockerfile
     env_file:
       - .env
     environment:
@@ -30,101 +34,97 @@ services:
       DATABASE_BACKEND: postgresql
       POSTGRES_HOST: postgres
       POSTGRES_PORT: 5432
-    ports:
-      - "8001:8000"
+      SERVICE_PORT: 8001
+      GRPC_PORT: 50051
     depends_on:
       postgres:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/status')"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
 
-  ai-agent-service:
+  rental-service:
     build:
       context: .
-      dockerfile: services/ai_agent_service/Dockerfile
+      dockerfile: rental-service/Dockerfile
     env_file:
       - .env
     environment:
       APP_ENV: dev
-    ports:
-      - "8003:8000"
+      SERVICE_PORT: 8002
+      GRPC_PORT: 50052
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8002/status')"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
 
-  item-service:
+  analytics-service:
     build:
       context: .
-      dockerfile: services/item-service/Dockerfile
+      dockerfile: analytics-service/Dockerfile
     env_file:
       - .env
     environment:
       APP_ENV: dev
-      DATABASE_BACKEND: postgresql
-      POSTGRES_HOST: postgres
-      POSTGRES_PORT: 5432
-    ports:
-      - "8002:8000"
+      SERVICE_PORT: 8003
+      GRPC_PORT: 50053
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8003/status')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  agentic-service:
+    build:
+      context: .
+      dockerfile: agentic-service/Dockerfile
+    env_file:
+      - .env
+    environment:
+      APP_ENV: dev
+      SERVICE_PORT: 8004
+      GRPC_PORT: 50054
     depends_on:
-      postgres:
+      mongodb:
         condition: service_healthy
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/status')"]
       interval: 10s
       timeout: 5s
-      retries: 10
+      retries: 12
 
   api-gateway:
     build:
       context: .
-      dockerfile: gateway/Dockerfile
+      dockerfile: api-gateway/Dockerfile
     env_file:
       - .env
     environment:
       APP_ENV: dev
-      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL:-http://auth-service:8000}
-      ITEM_SERVICE_URL: ${ITEM_SERVICE_URL:-http://item-service:8000}
-      AI_AGENT_SERVICE_URL: ${AI_AGENT_SERVICE_URL:-http://ai-agent-service:8000}
+      USER_SERVICE_ADDR: ${USER_SERVICE_ADDR:-user-service:50051}
+      RENTAL_SERVICE_ADDR: ${RENTAL_SERVICE_ADDR:-rental-service:50052}
+      ANALYTICS_SERVICE_ADDR: ${ANALYTICS_SERVICE_ADDR:-analytics-service:50053}
+      AGENTIC_SERVICE_ADDR: ${AGENTIC_SERVICE_ADDR:-agentic-service:50054}
+      USER_SERVICE_URL: ${USER_SERVICE_URL:-http://user-service:8001}
+      RENTAL_SERVICE_URL: ${RENTAL_SERVICE_URL:-http://rental-service:8002}
+      ANALYTICS_SERVICE_URL: ${ANALYTICS_SERVICE_URL:-http://analytics-service:8003}
+      AGENTIC_SERVICE_URL: ${AGENTIC_SERVICE_URL:-http://agentic-service:8004}
     depends_on:
-      auth-service:
+      user-service:
         condition: service_healthy
-      item-service:
+      rental-service:
         condition: service_healthy
-      ai-agent-service:
+      analytics-service:
+        condition: service_healthy
+      agentic-service:
         condition: service_healthy
     ports:
-      - "8000:8000"
+      - "${GATEWAY_PORT:-8000}:8000"
     healthcheck:
-      test:
-        [
-          "CMD",
-          "python",
-          "-c",
-          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')",
-        ]
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
       interval: 10s
       timeout: 5s
       retries: 10
@@ -139,65 +139,8 @@ services:
       api-gateway:
         condition: service_healthy
     ports:
-      - "${FRONTEND_PORT:-3001}:3000"
-
-  prometheus:
-    image: prom/prometheus:v2.54.1
-    command:
-      - --config.file=/etc/prometheus/prometheus.yml
-      - --storage.tsdb.path=/prometheus
-    volumes:
-      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./monitoring/prometheus/rules:/etc/prometheus/rules:ro
-      - prometheus_data:/prometheus
-    depends_on:
-      api-gateway:
-        condition: service_healthy
-      auth-service:
-        condition: service_healthy
-      item-service:
-        condition: service_healthy
-      ai-agent-service:
-        condition: service_healthy
-      cadvisor:
-        condition: service_started
-    ports:
-      - "9090:9090"
-
-  grafana:
-    image: grafana/grafana-oss:11.2.0
-    environment:
-      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
-      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
-      GF_USERS_ALLOW_SIGN_UP: "false"
-    volumes:
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
-      - grafana_data:/var/lib/grafana
-    depends_on:
-      prometheus:
-        condition: service_started
-    ports:
-      - "3000:3000"
-
-  cadvisor:
-    image: ghcr.io/google/cadvisor:0.56.2
-    privileged: true
-    command:
-      - --docker_only=true
-      - --housekeeping_interval=30s
-    devices:
-      - /dev/kmsg:/dev/kmsg
-    volumes:
-      - /:/rootfs:ro
-      - /sys/fs/cgroup:/sys/fs/cgroup:ro
-      - /var/run:/var/run:ro
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /sys:/sys:ro
-      - /var/lib/docker:/var/lib/docker:ro
-      - /dev/disk:/dev/disk:ro
+      - "${FRONTEND_PORT:-3000}:3000"
 
 volumes:
   postgres_data:
-  prometheus_data:
-  grafana_data:
+  mongo_data:

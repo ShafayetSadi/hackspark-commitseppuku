@@ -1,0 +1,20 @@
+syntax = "proto3";
+
+package agentic;
+
+service AgenticService {
+  rpc Chat(ChatRequest) returns (ChatResponse);
+}
+
+message ChatRequest {
+  string query = 1;
+  int32 top_k = 2;
+  string session_id = 3;
+}
+
+message ChatResponse {
+  string answer = 1;
+  repeated string sources = 2;
+  float confidence = 3;
+  string session_id = 4;
+}

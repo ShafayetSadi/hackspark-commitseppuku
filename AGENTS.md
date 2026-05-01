@@ -1,213 +1,294 @@
 # AGENTS.md
 
-This file is the agent-facing companion to `README.md`. It captures the repo-specific commands, architecture, constraints, and verification rules that coding agents should follow when working in `hackspark`.
+Agent-facing companion to `README.md`. Follow these rules exactly when working in this repo.
+
+---
 
 ## Project overview
 
-`hackspark` is a FastAPI microservices starter built around one public API gateway and three internal services:
+RentPi hackathon — FastAPI HTTP gateway + 4 services that expose HTTP status routes and gRPC business APIs.
 
-- `gateway/` routes public traffic, validates JWTs, and proxies to downstream services.
-- `services/auth_service/` owns registration, login, and current-user lookup.
-- `services/item-service/` owns item CRUD-style inventory endpoints.
-- `services/ai_agent_service/` owns the chat endpoint and currently uses a stubbed RAG + mock LLM flow.
-- `shared/app_core/` holds cross-service utilities only: config, database helpers, security, logging, and request middleware.
+| Folder | Docker service | Transport | Port | Responsibility |
+|--------|---------------|-----------|------|----------------|
+| `api-gateway/` | `api-gateway` | HTTP (FastAPI) | 8000 | JWT validation, HTTP→gRPC translation, `/status` aggregation |
+| `user-service/` | `user-service` | HTTP + gRPC | 8001 / 50051 | Auth (register/login/me), Postgres, Alembic |
+| `rental-service/` | `rental-service` | HTTP + gRPC | 8002 / 50052 | Products/availability — proxies Central API |
+| `analytics-service/` | `analytics-service` | HTTP + gRPC | 8003 / 50053 | Trend analysis, surge detection, recommendations |
+| `agentic-service/` | `agentic-service` | HTTP + gRPC | 8004 / 50054 | AI chatbot, MongoDB session store |
+| `frontend/` | `frontend` | HTTP | 3000 | Next.js UI, talks only through api-gateway |
 
-External traffic should enter through the gateway first. Keep service boundaries HTTP-based; do not add direct business-logic imports between services.
+Python packages **inside** each folder keep their original names:
+- `api-gateway/gateway/`
+- `user-service/auth_service/`
+- `agentic-service/ai_agent_service/`
+- `rental-service/rental_service/`
+- `analytics-service/analytics_service/`
+
+Proto definitions live in `proto/`. Generated stubs live in `shared/grpc_gen/` (committed, not built at runtime).
+
+`shared/app_core/` holds cross-cutting utilities. Never put domain logic there.
+
+---
 
 ## Setup commands
 
-- Install dependencies: `uv sync`
-- Refresh the lockfile after dependency changes: `uv lock`
-- Copy environment defaults: `cp .env.example .env`
-- Start the dev stack: `make up`
-- Start the dev stack with rebuild: `make up-build`
-- Stop the dev stack: `make down`
-- Stop the dev stack and remove volumes: `make down-v`
+```bash
+cp .env.example .env          # fill in CENTRAL_API_TOKEN and JWT_SECRET
+docker compose up --build     # starts all services + postgres + mongodb
+```
 
-The default compose file is `docker-compose.yml`. On this checkout, Postgres is published on host port `5434`, not `5432`.
+Local dev (no Docker):
+```bash
+uv sync
+make up-build
+```
+
+---
 
 ## Developer commands
 
-- Format code: `make format`
-- Lint code: `make lint`
-- Run type checks: `make typecheck`
-- Run tests: `make test`
-- Run the full local gate: `make check`
-- Run the monitoring smoke check against a live Compose stack: `make monitoring-smoke`
-- Run one test: `uv run pytest tests/path/to_test.py::test_name`
-- Apply auth migrations: `make migrate-auth`
-- Apply item migrations: `make migrate-items`
-- Apply all migrations: `make migrate`
-- Create an auth migration with Alembic autogenerate: `make revision-auth MSG=add_user_indexes`
-- Create an item migration with Alembic autogenerate: `make revision-items MSG=add_item_status`
-- Check auth Alembic state: `make alembic-check-auth`
-- Check item Alembic state: `make alembic-check-items`
-- Check all Alembic state: `make alembic-check`
-- Roll back auth migrations one revision: `make downgrade-auth`
-- Roll back item migrations one revision: `make downgrade-items`
-- Roll back all migrations one revision: `make downgrade`
-- Scaffold a service: `make add-service name=<name>`
+| Command | What it does |
+|---------|-------------|
+| `make up` | Start stack |
+| `make up-build` | Start stack with rebuild |
+| `make down` | Stop stack |
+| `make down-v` | Stop stack and wipe volumes |
+| `make proto` | Regenerate gRPC stubs from `proto/*.proto` into `shared/grpc_gen/` |
+| `make migrate` | Run all Alembic migrations |
+| `make migrate-user` | Run user-service migrations only |
+| `make revision-user MSG=<desc>` | Autogenerate a new user-service migration |
+| `make alembic-check` | Verify migration state |
+| `make downgrade REV=-1` | Roll back one migration |
+| `make format` | Run ruff formatter |
+| `make lint` | Run ruff linter |
+| `make typecheck` | Run ty on all packages |
+| `make test` | Run pytest |
+| `make check` | format + lint + typecheck + test |
 
-## Dev environment tips
+Run one test: `uv run python -m pytest tests/path/to_test.py::test_name`
 
-- Use `make check` as the default final verification for non-trivial changes.
-- `ty` must be run per package because this repo intentionally reuses import roots across services.
-- The Makefile already encodes the safe `ty` commands; prefer `make typecheck` over ad hoc root-level `ty` runs.
-- For Alembic migrations, always create revision files through `make revision-auth MSG=...` or `make revision-items MSG=...`. Do not hand-write migration files from scratch.
-- If `revision --autogenerate` fails because the target database is not up to date, run the matching migration and/or `make alembic-check-auth` / `make alembic-check-items` first.
-- Alembic revision targets require `MSG=...` and use `--autogenerate`; review the generated migration file, then verify it with real upgrade and downgrade runs before considering the migration done.
-- Migration rollback targets default to `REV=-1`. Override the revision explicitly when needed, for example: `make downgrade-auth REV=base`.
-- If you need to run `ty` manually, use the service-local commands:
-  - `uv run ty check shared`
-  - `uv run --directory gateway ty check gateway`
-  - `uv run --directory services/auth_service ty check auth_service`
-  - `uv run --directory services/ai_agent_service ty check ai_agent_service`
-  - `uv run --directory services/item-service ty check app`
-- The filesystem path `services/item-service/` maps to Python package `app`. The auth and AI services use `auth_service` and `ai_agent_service` package names.
+---
 
 ## Architecture
 
 ### Request flow
 
-Public request flow is:
-
-`Client -> gateway (:8000) -> auth_service (:8001) / item_service (:8002) / ai_agent_service (:8003)`
-
-The gateway JWT middleware allows these public prefixes:
-
-- `/health`
-- `/auth/login`
-- `/auth/register`
-- `/docs`
-- `/openapi.json`
-- `/redoc`
-
-Protected requests must carry a bearer token. The gateway decodes the JWT and stores the subject on `request.state.user_id` before proxying.
-
-### Service layout
-
-Most services follow this shape:
-
-```text
-<package>/
-  api/routes.py
-  core/config.py
-  schemas/
-  services/
-  models/        # db-backed services
-  db/session.py  # db-backed services
+```
+Client → api-gateway:8000 (HTTP/JSON)
+            → HTTP /<service>/status → service:800x /status
+            → gRPC → user-service:50051       → Postgres
+            → gRPC → rental-service:50052     → Central API (rate-limited)
+            → gRPC → analytics-service:50053  → Central API (rate-limited)
+            → gRPC → agentic-service:50054    → MongoDB + LLM
 ```
 
-Keep route handlers thin. Put business logic in `services/`. Keep shared utilities generic inside `shared/app_core/`.
+### Gateway public paths (no JWT required)
 
-### Shared library
+- `/status`
+- `/health`
+- `/user-service/status`
+- `/rental-service/status`
+- `/analytics-service/status`
+- `/agentic-service/status`
+- `/users/login`
+- `/users/register`
+- `/docs`, `/openapi.json`, `/redoc`, `/metrics`
 
-Important shared modules:
+All other paths require `Authorization: Bearer <jwt>`.
 
-- `shared/app_core/security.py`: password hashing and verification, JWT creation and decoding
-- `shared/app_core/http.py`: request logging middleware with `X-Request-ID`
-- `shared/app_core/logging.py`: structlog configuration
-- `monitoring/prometheus/rules/hackspark-alerts.yml`: baseline recording and alert rules
-- `shared/app_core/database.py`: async SQLAlchemy engine/session helpers
-- `shared/app_core/config.py`: common settings base class
+### Gateway HTTP endpoints
 
-Password hashing already uses `argon2` via `argon2-cffi`. Do not reintroduce `passlib`/`bcrypt`.
+| Method | Path | gRPC call |
+|--------|------|-----------|
+| POST | `/users/register` | UserService.Register |
+| POST | `/users/login` | UserService.Login |
+| GET | `/users/me` | UserService.Me |
+| GET | `/user-service/status` | HTTP proxy → `http://user-service:8001/status` |
+| GET | `/rental-service/status` | HTTP proxy → `http://rental-service:8002/status` |
+| GET | `/analytics-service/status` | HTTP proxy → `http://analytics-service:8003/status` |
+| GET | `/agentic-service/status` | HTTP proxy → `http://agentic-service:8004/status` |
+| GET | `/rentals/products` | RentalService.ListProducts |
+| GET | `/rentals/products/{id}` | RentalService.GetProduct |
+| GET | `/analytics/trends` | AnalyticsService.GetTrends |
+| GET | `/analytics/surge` | AnalyticsService.GetSurge |
+| GET | `/analytics/recommendations` | AnalyticsService.GetRecommendations |
+| POST | `/chat` | AgenticService.Chat |
 
-### Gateway behavior
+The gateway calls each downstream HTTP `/status` endpoint **in parallel** via `asyncio.gather` to build the aggregated `/status` response. Business traffic still uses gRPC.
 
-- Proxy logic lives in `gateway/gateway/services/proxy.py`.
-- Preserve normalized gateway error behavior:
-  - upstream timeout -> `504`
-  - upstream unavailable -> `502`
-  - upstream `5xx` -> `502`
-- Preserve `X-Request-ID` propagation and structured request logging.
-- Keep framework logs JSON-formatted and avoid reintroducing ad hoc `print(...)` debug output in service startup or metrics code.
+---
 
-### AI service status
+## gRPC contracts
 
-The AI service is intentionally a scaffold:
+Proto files are in `proto/`. Stubs are pre-generated in `shared/grpc_gen/` — run `make proto` after editing any `.proto` file.
 
-- retrieval is in-memory
-- relevance scoring is keyword-based
-- prompt context is assembled locally
-- `llm/mock_llm.py` returns a canned answer
+### Stub import rule
 
-If you replace the LLM path, do it behind the existing service boundary rather than spreading provider-specific logic across the repo.
+Always import stubs as:
+```python
+from shared.grpc_gen import user_pb2, user_pb2_grpc
+```
 
-## Code style and implementation rules
+Never import from `grpc_gen` directly — stubs have package-qualified cross-imports.
 
-- Target Python `3.12`.
-- Use `ruff` for formatting and import ordering.
-- Keep changes small and local to the owning service whenever possible.
-- Do not bypass the gateway by coupling services directly in Python.
-- Reuse `shared/app_core/` only for truly cross-cutting concerns, not domain logic.
-- Prefer explicit, stable JSON error responses over leaking downstream exceptions.
-- Preserve structured logging events: `request_started`, `request_completed`, and `request_failed`.
+### gRPC error mapping (gateway)
 
-## Testing instructions
+`shared/app_core/grpc_errors.grpc_to_http_exception()` converts gRPC status codes to HTTP:
+- `NOT_FOUND` → 404, `UNAUTHENTICATED` → 401, `ALREADY_EXISTS` → 409
+- `INVALID_ARGUMENT` → 400, `DEADLINE_EXCEEDED` → 504, `UNAVAILABLE` → 502
 
-- Tests live under `tests/`, split into `tests/unit/` and `tests/integration/`.
-- Integration tests are marked with `@pytest.mark.integration`.
-- To skip slow integration coverage, run: `uv run pytest -m 'not integration'`
-- The test harness in `tests/conftest.py` isolates environments, rewrites `sys.path`, and clears module state so repeated package names do not collide across services.
-- When changing gateway proxying, auth flow, service contracts, or request logging, add or update tests in `tests/integration/` or the relevant `tests/unit/` module.
-- When changing monitoring assets, also update the config-coverage tests for Prometheus rules/dashboard expectations and rerun `make monitoring-smoke` if the Compose stack is up.
+Always use it in gateway route handlers:
+```python
+except grpc.RpcError as exc:
+    raise grpc_to_http_exception(exc) from exc
+```
 
-For most code changes:
+---
 
-1. Run targeted tests for the touched area.
-2. Run `make typecheck`.
-3. Run `make test`.
-4. Run `make check` before finishing if the change is more than trivial.
+## Central API — CRITICAL RULES
 
-For migration changes:
+**Base URL:** `https://technocracy.brittoo.xyz`
+**Hard limit:** 30 req/min per team token. Each violation costs **−20 points**.
+**Our enforced ceiling:** 20 req/min per service process (10 req/min safety buffer).
 
-1. Generate the revision with `make revision-auth MSG=...` or `make revision-items MSG=...`.
-2. Review the autogenerated file instead of replacing it with a hand-written migration.
-3. Run the matching upgrade target.
-4. Run the matching downgrade target.
-5. Re-run the matching upgrade target so the repo is left in the intended final state.
+### Rule: always use `CentralAPIClient`, never raw httpx
 
-## Manual verification
+Every call to the Central API **must** go through:
 
-Prefer gateway-first smoke testing through `http://localhost:8000` rather than calling internal services first.
+```python
+from shared.app_core.central_api import CentralAPIClient
 
-Useful endpoints:
+client = CentralAPIClient(settings.central_api_url, settings.central_api_token)
+data = await client.get("/api/data/products", params={"category": "TOOLS"})
+```
 
-- `GET /health`
-- `POST /auth/register`
-- `POST /auth/login`
-- `GET /auth/me`
-- `POST /items`
-- `GET /items`
-- `POST /ai/chat`
+`CentralAPIClient` uses a sliding-window rate limiter that blocks callers (backpressure) when the limit would be exceeded.
 
-If the compose stack is running, gateway docs should be at `http://localhost:8000/docs`.
+### Token rules
 
-## Security and config notes
+- Token lives in `.env` as `CENTRAL_API_TOKEN`. Never hardcode it.
+- `.env` is gitignored. Never commit it.
 
-- `JWT_SECRET` is required and must match across gateway and downstream services.
-- `DATABASE_BACKEND=postgresql` is the default runtime path.
-- For local non-Docker tests, SQLite is supported via `DATABASE_BACKEND=sqlite` and `SQLITE_PATH`.
-- In `docker-compose.prod.yml`, the frontend (`:3001`) and gateway (`:8000`) are publicly exposed for application traffic; Prometheus (`:9090`) and Grafana (`:3000`) are also published for observability.
-- `docker-compose.prod.yml` currently includes privileged cAdvisor host mounts (including Docker socket access); treat it as an observability-oriented deployment, not a hardened production baseline.
-- Do not commit secrets or hardcode provider credentials.
+---
 
-## When adding or changing services
+## Shared library (`shared/app_core/`)
 
-If you scaffold or add a service, update all of the following together:
+| Module | Purpose |
+|--------|---------|
+| `central_api.py` | **Rate-limited Central API client** — use for all Central API calls |
+| `config.py` | `CommonSettings` base class (pydantic-settings) |
+| `security.py` | Argon2 password hashing, JWT creation/decoding |
+| `database.py` | Async SQLAlchemy engine/session helpers |
+| `grpc_errors.py` | gRPC→HTTP status code mapping for the gateway |
+| `grpc_interceptors.py` | `register_health()` — wires gRPC health check into a server |
+| `http.py` | Request logging middleware (`X-Request-ID`) — gateway only |
+| `logging.py` | structlog configuration |
+| `metrics.py` | Prometheus metrics middleware — gateway only |
 
-- `docker-compose*.yml`
-- gateway routing/config
+Password hashing uses `argon2-cffi`. Do **not** introduce `passlib` or `bcrypt`.
+
+---
+
+## Code rules
+
+- Python 3.12. Use `ruff` for formatting and imports.
+- Gateway: FastAPI route handlers are thin — just gRPC stub call + error mapping.
+- Services: gRPC servicer methods are thin — business logic in `services/`.
+- Do not import domain logic from one service into another — use gRPC.
+- Do not store any data in Postgres other than auth (users table). All product/rental data comes from Central API.
+- Preserve structured logging events: `grpc_request_started`, `grpc_request_completed` in servicers.
+- Gateway error mapping: gRPC `DEADLINE_EXCEEDED` → 504, `UNAVAILABLE` → 502.
+
+---
+
+## LLM provider selection (agentic-service)
+
+Set `LLM_PROVIDER` in `.env`:
+- `mock` — no API key needed, useful for dev/tests
+- `gemini` — requires `GEMINI_API_KEY` (free tier available, recommended)
+- `openai` — requires `OPENAI_API_KEY`
+- `groq` — requires `GROQ_API_KEY`
+
+---
+
+## Adding a new gRPC endpoint
+
+1. Add the RPC to the relevant `.proto` file in `proto/`
+2. Run `make proto` to regenerate stubs
+3. Implement the method in the service's `grpc_service.py`
+4. Add the corresponding HTTP route in `api-gateway/gateway/api/routes.py`
+
+---
+
+## Adding or changing services
+
+When scaffolding or changing any service, update all of:
+
+- `proto/` (add/modify proto file, run `make proto`)
+- `docker-compose.yml` and `docker-compose.prod.yml`
+- gateway routing in `api-gateway/gateway/api/routes.py`
+- gateway config in `api-gateway/gateway/core/config.py`
 - `Makefile` `typecheck` target
-- docs and any new env vars
-- tests for the new route surface
+- `pyproject.toml` `[tool.ty.environment].extra-paths`
+- `.env.example` for any new env vars
+- This file (`AGENTS.md`)
 
-## Change expectations
+---
 
-When you modify code in this repository, agents should:
+## Migrations (user-service only)
 
-- keep instructions aligned with the current implementation, not boilerplate assumptions
-- verify behavior with commands, not by inspection alone
-- update docs when behavior, commands, ports, or contracts change
-- avoid speculative architecture rewrites unless explicitly requested
+```bash
+make revision-user MSG=describe_the_change   # autogenerate
+make migrate-user                            # apply
+make downgrade REV=-1                        # roll back one
+```
+
+Always review autogenerated files before applying. Run upgrade → downgrade → upgrade to verify reversibility.
+
+---
+
+## Typecheck commands (per-package)
+
+```bash
+uv run ty check shared
+uv run --directory api-gateway ty check gateway
+uv run --directory user-service ty check auth_service
+uv run --directory agentic-service ty check ai_agent_service
+```
+
+`rental-service` and `analytics-service` are not yet in the typecheck target — add them when their code is non-trivial.
+
+---
+
+## Manual smoke test
+
+With the stack running:
+
+```bash
+curl http://localhost:8000/status          # gateway aggregated status (gRPC health checks)
+curl http://localhost:8000/health          # gateway HTTP health
+
+# Register
+curl -X POST http://localhost:8000/users/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123","name":"Test User"}'
+
+# Login → get token
+TOKEN=$(curl -s -X POST http://localhost:8000/users/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"test@example.com","password":"password123"}' | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+
+# Protected endpoints
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/users/me
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/rentals/products
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/analytics/trends
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/analytics/surge
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8000/analytics/recommendations
+
+# Chat
+curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"query":"How does JWT auth protect inventory endpoints?","top_k":3}'
+```
+
+Gateway Swagger docs: `http://localhost:8000/docs`

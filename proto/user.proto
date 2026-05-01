@@ -1,0 +1,35 @@
+syntax = "proto3";
+
+package user;
+
+service UserService {
+  rpc Register(RegisterRequest) returns (AuthResponse);
+  rpc Login(LoginRequest) returns (AuthResponse);
+  rpc Me(MeRequest) returns (UserResponse);
+}
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;
+  string full_name = 3;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message MeRequest {
+  string user_id = 1;
+}
+
+message AuthResponse {
+  string access_token = 1;
+  string token_type = 2;
+}
+
+message UserResponse {
+  int32 id = 1;
+  string email = 2;
+  string full_name = 3;
+}
