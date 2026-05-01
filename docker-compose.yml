@@ -13,13 +13,13 @@ services:
       timeout: 5s
       retries: 10
 
-  mongodb:
-    image: mongo:7-jammy
+  redis:
+    image: redis:7-alpine
     volumes:
-      - mongo_data:/data/db
+      - redis_data:/data
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
-      interval: 10s
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
       timeout: 5s
       retries: 10
 
@@ -88,7 +88,7 @@ services:
       SERVICE_PORT: 8004
       GRPC_PORT: 50054
     depends_on:
-      mongodb:
+      redis:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8004/status')"]
@@ -143,4 +143,4 @@ services:
 
 volumes:
   postgres_data:
-  mongo_data:
+  redis_data:
