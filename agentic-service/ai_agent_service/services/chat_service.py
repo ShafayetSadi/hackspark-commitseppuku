@@ -89,6 +89,7 @@ async def process_chat(
                 "tool_name": execution.name,
                 "arguments": execution.arguments,
                 "result": execution.result,
+                "status": "ok",
             }
             sources = [f"tool:{execution.name}"]
             confidence = 0.9
@@ -101,6 +102,12 @@ async def process_chat(
                 exec_ms=round((time.monotonic() - t_exec) * 1000),
             )
         else:
+            tool_payload = {
+                "tool_name": tool_decision.tool_name,
+                "status": "failed",
+                "note": "Tool execution failed — data is unavailable. Do not guess or invent any numbers.",
+            }
+            sources = [f"tool:{tool_decision.tool_name}"]
             logger.info(
                 "chat_tool_skipped",
                 session_id=sid,

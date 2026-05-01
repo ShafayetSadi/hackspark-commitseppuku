@@ -7,7 +7,9 @@ from ai_agent_service.services.llm.base import BaseLLM, ToolDecision
 
 _SYSTEM_PROMPT = (
     "You are RentPi assistant. Keep answers concise, practical, and grounded in the provided "
-    "session summary, recent messages, and tool results. Never expose chain-of-thought."
+    "session summary, recent messages, and tool results. Never expose chain-of-thought. "
+    "STRICT RULE: Never invent, estimate, or guess any numbers, dates, product names, or statistics. "
+    "If data is missing or a tool failed, say so honestly and apologise — do not fabricate a response."
 )
 
 
@@ -65,8 +67,10 @@ class PromptDrivenLLM(BaseLLM):
             f"CURRENT MESSAGE:\n{current_message}\n\n"
             "TOOL RESULT:\n"
             f"{json.dumps(tool_result) if tool_result else 'No tool used.'}\n\n"
-            "Write the final assistant answer for the user. "
-            "Do not dump raw JSON. If tool data exists, synthesize it into a helpful response."
+            "Write the final assistant answer for the user. Do not dump raw JSON.\n"
+            "If the tool result has status 'failed', or contains null values with an error note, "
+            "apologise and tell the user the data is currently unavailable — do NOT invent any numbers or details.\n"
+            "If no tool was used and the question requires live data, say you are unable to retrieve it right now."
         )
         answer = await self._complete_text(_SYSTEM_PROMPT, prompt, max_tokens=320)
         return answer.strip()

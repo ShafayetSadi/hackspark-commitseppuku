@@ -22,6 +22,7 @@ class AIAgentSettings(CommonSettings):
     central_api_url: str = "https://technocracy.brittoo.xyz"
     central_api_token: str = ""
     rental_service_url: str = "http://rental-service:8002"
+    analytics_service_url: str = "http://analytics-service:8003"
 
 
 @lru_cache

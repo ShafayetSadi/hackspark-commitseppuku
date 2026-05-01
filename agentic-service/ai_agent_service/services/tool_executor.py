@@ -43,13 +43,13 @@ TOOL_SPECS = (
     ),
     ToolSpec(
         name="get_peak_window",
-        description="Returns the busiest rental window for a category.",
-        arguments=("category",),
+        description="Returns the peak rental period within a month range. Requires from_month and to_month in YYYY-MM format.",
+        arguments=("from_month", "to_month"),
     ),
     ToolSpec(
         name="get_surge_days",
-        description="Returns recent demand spike days for a category.",
-        arguments=("category",),
+        description="Returns rental surge days for a specific month. Requires month in YYYY-MM format.",
+        arguments=("month",),
     ),
 )
 
@@ -101,7 +101,7 @@ async def execute_tool(
     arguments: dict[str, str],
     settings: AIAgentSettings,
 ) -> ToolExecution:
-    normalized = {key: value.strip() for key, value in arguments.items() if value and value.strip()}
+    normalized = {key: str(value).strip() for key, value in arguments.items() if value is not None and str(value).strip()}
     subject = normalized.get("category") or normalized.get("subject") or normalized.get("region") or ""
     data = _resolve_subject_data(subject)
 
@@ -122,17 +122,12 @@ async def execute_tool(
             "note": "Ranked by recent engagement and conversion lift.",
         }
     elif name == "get_peak_window":
-        result = {
-            "category": _humanize_subject(subject or "tools"),
-            "peak_window": data["peak_window"],
-            "note": "Traffic spikes align with pickup planning and project starts.",
-        }
+        from_month = normalized.get("from_month", "")
+        to_month = normalized.get("to_month", "")
+        result = await _fetch_peak_window(settings, from_month, to_month)
     elif name == "get_surge_days":
-        result = {
-            "category": _humanize_subject(subject or "tools"),
-            "surge_days": data["surge_days"],
-            "note": "Surge days reflect the strongest week-over-week demand movement.",
-        }
+        month = normalized.get("month", "")
+        result = await _fetch_surge_days(settings, month)
     else:
         logger.warning("tool_unknown", tool=name)
         raise ValueError(f"Unknown tool: {name}")
@@ -288,6 +283,78 @@ async def _fetch_availability(
         available=data.get("available"),
         busy_periods=len(data.get("busyPeriods", [])),
         free_windows=len(data.get("freeWindows", [])),
+        elapsed_ms=elapsed,
+    )
+    return data
+
+
+async def _fetch_peak_window(settings: AIAgentSettings, from_month: str, to_month: str) -> dict:
+    if not from_month or not to_month:
+        logger.warning("peak_window_missing_args", from_month=from_month or None, to_month=to_month or None)
+        return {"peakWindow": None, "note": "Could not fetch peak window: from_month and to_month are required (YYYY-MM)."}
+
+    url = f"{settings.analytics_service_url}/peak-window"
+    logger.info("analytics_service_call_start", endpoint="peak-window", from_month=from_month, to_month=to_month)
+    t0 = time.monotonic()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, params={"from": from_month, "to": to_month})
+    except httpx.TimeoutException:
+        logger.error("analytics_service_timeout", endpoint="peak-window", elapsed_ms=round((time.monotonic() - t0) * 1000))
+        return {"peakWindow": None, "note": "Analytics service timed out while fetching peak window."}
+    except httpx.RequestError as exc:
+        logger.error("analytics_service_unreachable", endpoint="peak-window", error=str(exc))
+        return {"peakWindow": None, "note": "Analytics service is unreachable."}
+
+    elapsed = round((time.monotonic() - t0) * 1000)
+
+    if resp.status_code != 200:
+        logger.error("analytics_service_error", endpoint="peak-window", status=resp.status_code, elapsed_ms=elapsed)
+        return {"peakWindow": None, "note": f"Analytics service returned error {resp.status_code}."}
+
+    data = resp.json()
+    logger.info(
+        "analytics_service_call_ok",
+        endpoint="peak-window",
+        from_month=from_month,
+        to_month=to_month,
+        peak_start=data.get("peakWindow", {}).get("start") if isinstance(data.get("peakWindow"), dict) else None,
+        elapsed_ms=elapsed,
+    )
+    return data
+
+
+async def _fetch_surge_days(settings: AIAgentSettings, month: str) -> dict:
+    if not month:
+        logger.warning("surge_days_missing_args", month=None)
+        return {"surgeDays": None, "note": "Could not fetch surge days: month is required (YYYY-MM)."}
+
+    url = f"{settings.analytics_service_url}/surge-days"
+    logger.info("analytics_service_call_start", endpoint="surge-days", month=month)
+    t0 = time.monotonic()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, params={"month": month})
+    except httpx.TimeoutException:
+        logger.error("analytics_service_timeout", endpoint="surge-days", elapsed_ms=round((time.monotonic() - t0) * 1000))
+        return {"surgeDays": None, "note": "Analytics service timed out while fetching surge days."}
+    except httpx.RequestError as exc:
+        logger.error("analytics_service_unreachable", endpoint="surge-days", error=str(exc))
+        return {"surgeDays": None, "note": "Analytics service is unreachable."}
+
+    elapsed = round((time.monotonic() - t0) * 1000)
+
+    if resp.status_code != 200:
+        logger.error("analytics_service_error", endpoint="surge-days", status=resp.status_code, elapsed_ms=elapsed)
+        return {"surgeDays": None, "note": f"Analytics service returned error {resp.status_code}."}
+
+    data = resp.json()
+    logger.info(
+        "analytics_service_call_ok",
+        endpoint="surge-days",
+        month=month,
         elapsed_ms=elapsed,
     )
     return data
