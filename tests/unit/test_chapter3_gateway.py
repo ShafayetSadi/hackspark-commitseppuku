@@ -46,6 +46,93 @@ async def test_gateway_peak_window_route_maps_grpc_response(gateway_runtime, mon
     )
 
 
+async def test_gateway_surge_days_route_maps_grpc_response(gateway_runtime, monkeypatch):
+    class Stub:
+        async def GetSurgeDays(self, request):
+            assert request.month == "2024-03"
+            return gateway_runtime.api_routes.analytics_pb2.AnalyticsResponse(
+                json_data=(
+                    '{"month":"2024-03","data":['
+                    '{"date":"2024-03-01","count":4,"nextSurgeDate":"2024-03-04","daysUntil":3},'
+                    '{"date":"2024-03-31","count":3,"nextSurgeDate":null,"daysUntil":null}'
+                    ']}'
+                )
+            )
+
+    monkeypatch.setattr(
+        gateway_runtime.api_routes.analytics_client, "get_stub", lambda _addr: Stub()
+    )
+
+    settings = gateway_runtime.core_config.get_settings()
+    response = await gateway_runtime.api_routes.get_surge_days(
+        build_request("/analytics/surge-days", "month=2024-03"),
+        settings=settings,
+    )
+
+    assert response.body == (
+        b'{"month":"2024-03","data":[{"date":"2024-03-01","count":4,'
+        b'"nextSurgeDate":"2024-03-04","daysUntil":3},{"date":"2024-03-31",'
+        b'"count":3,"nextSurgeDate":null,"daysUntil":null}]}'
+    )
+
+
+async def test_gateway_recommendations_route_maps_grpc_response(gateway_runtime, monkeypatch):
+    class Stub:
+        async def GetRecommendations(self, request, *, timeout=None):
+            assert request.date == "2024-06-15"
+            assert request.limit == 2
+            assert timeout == 30.0
+            return gateway_runtime.api_routes.analytics_pb2.AnalyticsResponse(
+                json_data=(
+                    '{"date":"2024-06-15","recommendations":['
+                    '{"productId":1042,"name":"Elite Tent #1042","category":"OUTDOOR","score":24},'
+                    '{"productId":88,"name":"Pro Kayak #88","category":"SPORTS","score":19}'
+                    ']}'
+                )
+            )
+
+    monkeypatch.setattr(
+        gateway_runtime.api_routes.analytics_client, "get_stub", lambda _addr: Stub()
+    )
+
+    settings = gateway_runtime.core_config.get_settings()
+    response = await gateway_runtime.api_routes.get_recommendations(
+        build_request("/analytics/recommendations", "date=2024-06-15&limit=2"),
+        settings=settings,
+    )
+
+    assert response.body == (
+        b'{"date":"2024-06-15","recommendations":[{"productId":1042,'
+        b'"name":"Elite Tent #1042","category":"OUTDOOR","score":24},'
+        b'{"productId":88,"name":"Pro Kayak #88","category":"SPORTS","score":19}]}'
+    )
+
+
+async def test_gateway_recommendations_route_rejects_non_integer_limit(
+    gateway_runtime, monkeypatch
+):
+    class Stub:
+        async def GetRecommendations(self, _request):
+            raise AssertionError("gateway should reject invalid limit before gRPC")
+
+    monkeypatch.setattr(
+        gateway_runtime.api_routes.analytics_client, "get_stub", lambda _addr: Stub()
+    )
+
+    settings = gateway_runtime.core_config.get_settings()
+
+    try:
+        await gateway_runtime.api_routes.get_recommendations(
+            build_request("/analytics/recommendations", "date=2024-06-15&limit=abc"),
+            settings=settings,
+        )
+    except gateway_runtime.api_routes.HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "Invalid limit"
+    else:
+        raise AssertionError("Expected HTTPException")
+
+
 async def test_gateway_merged_feed_route_maps_grpc_response(gateway_runtime, monkeypatch):
     class Stub:
         async def GetMergedFeed(self, request):

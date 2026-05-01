@@ -13,6 +13,7 @@ _GRPC_TO_HTTP: dict[grpc.StatusCode, int] = {
     grpc.StatusCode.INVALID_ARGUMENT: 400,
     grpc.StatusCode.ALREADY_EXISTS: 409,
     grpc.StatusCode.RESOURCE_EXHAUSTED: 429,
+    grpc.StatusCode.FAILED_PRECONDITION: 503,
     grpc.StatusCode.DEADLINE_EXCEEDED: 504,
     grpc.StatusCode.UNAVAILABLE: 502,
     grpc.StatusCode.UNIMPLEMENTED: 501,

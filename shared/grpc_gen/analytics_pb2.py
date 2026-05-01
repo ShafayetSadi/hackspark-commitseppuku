@@ -4,40 +4,45 @@
 # source: analytics.proto
 # Protobuf Python Version: 5.28.1
 """Generated protocol buffer code."""
-
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import descriptor_pool as _descriptor_pool
 from google.protobuf import runtime_version as _runtime_version
 from google.protobuf import symbol_database as _symbol_database
 from google.protobuf.internal import builder as _builder
-
 _runtime_version.ValidateProtobufRuntimeVersion(
-    _runtime_version.Domain.PUBLIC, 5, 28, 1, "", "analytics.proto"
+    _runtime_version.Domain.PUBLIC,
+    5,
+    28,
+    1,
+    '',
+    'analytics.proto'
 )
 # @@protoc_insertion_point(imports)
 
 _sym_db = _symbol_database.Default()
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(
-    b'\n\x0f\x61nalytics.proto\x12\tanalytics"!\n\rTrendsRequest\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t" \n\x0cSurgeRequest\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t"9\n\x16RecommendationsRequest\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\x05"9\n\x11PeakWindowRequest\x12\x12\n\nfrom_month\x18\x01 \x01(\t\x12\x10\n\x08to_month\x18\x02 \x01(\t"&\n\x11\x41nalyticsResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t2\xbe\x02\n\x10\x41nalyticsService\x12\x43\n\tGetTrends\x12\x18.analytics.TrendsRequest\x1a\x1c.analytics.AnalyticsResponse\x12\x41\n\x08GetSurge\x12\x17.analytics.SurgeRequest\x1a\x1c.analytics.AnalyticsResponse\x12U\n\x12GetRecommendations\x12!.analytics.RecommendationsRequest\x1a\x1c.analytics.AnalyticsResponse\x12K\n\rGetPeakWindow\x12\x1c.analytics.PeakWindowRequest\x1a\x1c.analytics.AnalyticsResponseb\x06proto3'
-)
+
+
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0f\x61nalytics.proto\x12\tanalytics\"!\n\rTrendsRequest\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\" \n\x0cSurgeRequest\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\"G\n\x16RecommendationsRequest\x12\x10\n\x08\x63\x61tegory\x18\x01 \x01(\t\x12\r\n\x05limit\x18\x02 \x01(\x05\x12\x0c\n\x04\x64\x61te\x18\x03 \x01(\t\"9\n\x11PeakWindowRequest\x12\x12\n\nfrom_month\x18\x01 \x01(\t\x12\x10\n\x08to_month\x18\x02 \x01(\t\"!\n\x10SurgeDaysRequest\x12\r\n\x05month\x18\x01 \x01(\t\"&\n\x11\x41nalyticsResponse\x12\x11\n\tjson_data\x18\x01 \x01(\t2\x89\x03\n\x10\x41nalyticsService\x12\x43\n\tGetTrends\x12\x18.analytics.TrendsRequest\x1a\x1c.analytics.AnalyticsResponse\x12\x41\n\x08GetSurge\x12\x17.analytics.SurgeRequest\x1a\x1c.analytics.AnalyticsResponse\x12U\n\x12GetRecommendations\x12!.analytics.RecommendationsRequest\x1a\x1c.analytics.AnalyticsResponse\x12K\n\rGetPeakWindow\x12\x1c.analytics.PeakWindowRequest\x1a\x1c.analytics.AnalyticsResponse\x12I\n\x0cGetSurgeDays\x12\x1b.analytics.SurgeDaysRequest\x1a\x1c.analytics.AnalyticsResponseb\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
-_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "analytics_pb2", _globals)
+_builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'analytics_pb2', _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
-    DESCRIPTOR._loaded_options = None
-    _globals["_TRENDSREQUEST"]._serialized_start = 30
-    _globals["_TRENDSREQUEST"]._serialized_end = 63
-    _globals["_SURGEREQUEST"]._serialized_start = 65
-    _globals["_SURGEREQUEST"]._serialized_end = 97
-    _globals["_RECOMMENDATIONSREQUEST"]._serialized_start = 99
-    _globals["_RECOMMENDATIONSREQUEST"]._serialized_end = 156
-    _globals["_PEAKWINDOWREQUEST"]._serialized_start = 158
-    _globals["_PEAKWINDOWREQUEST"]._serialized_end = 215
-    _globals["_ANALYTICSRESPONSE"]._serialized_start = 217
-    _globals["_ANALYTICSRESPONSE"]._serialized_end = 255
-    _globals["_ANALYTICSSERVICE"]._serialized_start = 258
-    _globals["_ANALYTICSSERVICE"]._serialized_end = 576
+  DESCRIPTOR._loaded_options = None
+  _globals['_TRENDSREQUEST']._serialized_start=30
+  _globals['_TRENDSREQUEST']._serialized_end=63
+  _globals['_SURGEREQUEST']._serialized_start=65
+  _globals['_SURGEREQUEST']._serialized_end=97
+  _globals['_RECOMMENDATIONSREQUEST']._serialized_start=99
+  _globals['_RECOMMENDATIONSREQUEST']._serialized_end=170
+  _globals['_PEAKWINDOWREQUEST']._serialized_start=172
+  _globals['_PEAKWINDOWREQUEST']._serialized_end=229
+  _globals['_SURGEDAYSREQUEST']._serialized_start=231
+  _globals['_SURGEDAYSREQUEST']._serialized_end=264
+  _globals['_ANALYTICSRESPONSE']._serialized_start=266
+  _globals['_ANALYTICSRESPONSE']._serialized_end=304
+  _globals['_ANALYTICSSERVICE']._serialized_start=307
+  _globals['_ANALYTICSSERVICE']._serialized_end=700
 # @@protoc_insertion_point(module_scope)

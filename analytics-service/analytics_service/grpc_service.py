@@ -9,6 +9,7 @@ from analytics_service.services.analytics import (
     compute_peak_window,
     compute_recommendations,
     compute_surge,
+    compute_surge_days,
     compute_trends,
 )
 from shared.app_core.central_api import CentralAPIClient
@@ -40,6 +41,7 @@ class AnalyticsServicer(analytics_pb2_grpc.AnalyticsServiceServicer):
             401: grpc.StatusCode.UNAUTHENTICATED,
             409: grpc.StatusCode.ALREADY_EXISTS,
             429: grpc.StatusCode.RESOURCE_EXHAUSTED,
+            503: grpc.StatusCode.FAILED_PRECONDITION,
             502: grpc.StatusCode.UNAVAILABLE,
             504: grpc.StatusCode.DEADLINE_EXCEEDED,
         }
@@ -72,11 +74,22 @@ class AnalyticsServicer(analytics_pb2_grpc.AnalyticsServiceServicer):
     async def GetRecommendations(
         self, request: analytics_pb2.RecommendationsRequest, context: grpc.aio.ServicerContext
     ):
-        logger.info("grpc_get_recommendations", category=request.category or None)
+        logger.info("grpc_get_recommendations", date=request.date, limit=request.limit)
         try:
             limit = request.limit if request.limit > 0 else 5
-            data = await compute_recommendations(self._client(), request.category or None, limit)
+            data = await compute_recommendations(
+                self._client(),
+                target_date=request.date,
+                limit=limit,
+            )
             return analytics_pb2.AnalyticsResponse(json_data=json.dumps(data))
+        except HTTPException as exc:
+            logger.error(
+                "recommendations_error",
+                status_code=exc.status_code,
+                detail=str(exc.detail),
+            )
+            await self._abort_from_http_error(context, exc)
         except Exception as exc:
             logger.error("recommendations_error", error=str(exc))
             await context.abort(grpc.StatusCode.INTERNAL, "Analytics computation failed")
@@ -101,4 +114,21 @@ class AnalyticsServicer(analytics_pb2_grpc.AnalyticsServiceServicer):
             await self._abort_from_http_error(context, exc)
         except Exception as exc:
             logger.error("peak_window_error", error=str(exc))
+            await context.abort(grpc.StatusCode.INTERNAL, "Analytics computation failed")
+
+    async def GetSurgeDays(
+        self, request: analytics_pb2.SurgeDaysRequest, context: grpc.aio.ServicerContext
+    ):
+        logger.info("grpc_get_surge_days", month=request.month)
+        try:
+            data = await compute_surge_days(
+                self._client(),
+                month=request.month,
+            )
+            return analytics_pb2.AnalyticsResponse(json_data=json.dumps(data))
+        except HTTPException as exc:
+            logger.error("surge_days_error", status_code=exc.status_code, detail=str(exc.detail))
+            await self._abort_from_http_error(context, exc)
+        except Exception as exc:
+            logger.error("surge_days_error", error=str(exc))
             await context.abort(grpc.StatusCode.INTERNAL, "Analytics computation failed")

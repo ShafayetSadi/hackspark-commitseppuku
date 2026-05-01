@@ -7,6 +7,7 @@ service AnalyticsService {
   rpc GetSurge(SurgeRequest) returns (AnalyticsResponse);
   rpc GetRecommendations(RecommendationsRequest) returns (AnalyticsResponse);
   rpc GetPeakWindow(PeakWindowRequest) returns (AnalyticsResponse);
+  rpc GetSurgeDays(SurgeDaysRequest) returns (AnalyticsResponse);
 }
 
 message TrendsRequest {
@@ -20,11 +21,16 @@ message SurgeRequest {
 message RecommendationsRequest {
   string category = 1;
   int32 limit = 2;
+  string date = 3;
 }
 
 message PeakWindowRequest {
   string from_month = 1;
   string to_month = 2;
+}
+
+message SurgeDaysRequest {
+  string month = 1;
 }
 
 // JSON payload containing computed analytics
