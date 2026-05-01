@@ -17,7 +17,7 @@ class AIAgentSettings(CommonSettings):
     openai_api_key: str = ""
     groq_api_key: str = ""
     openai_model: str = "gpt-4o-mini"
-    gemini_model: str = "gemini-1.5-flash"
+    gemini_model: str = "gemini-2.5-flash"
     groq_model: str = "llama-3.1-8b-instant"
     central_api_url: str = "https://technocracy.brittoo.xyz"
     central_api_token: str = ""
