@@ -567,6 +567,10 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
       });
 
       if (!response.ok) {
+        if (response.status === 422) {
+          showToast("Please enter your email and password correctly.", "error");
+          return;
+        }
         if (response.status === 401) {
           showToast("Invalid email or password. Please try again.", "error");
           return;
@@ -631,6 +635,10 @@ export default function AuthScreen({ initialUser }: AuthScreenProps) {
       });
 
       if (!response.ok) {
+        if (response.status === 422) {
+          showToast("Please fill in all required fields correctly.", "error");
+          return;
+        }
         if (response.status === 409) {
           showToast(
             "An account with this email already exists. Try signing in instead.",

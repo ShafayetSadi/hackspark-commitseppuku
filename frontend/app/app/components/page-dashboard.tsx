@@ -673,6 +673,27 @@ export function Analytics() {
   const [mergedFeed, setMergedFeed] = useState<
     Array<{ rentalId: number; productId: number; rentalStart: string; rentalEnd: string }>
   >([]);
+  const [analyticsCategory, setAnalyticsCategory] = useState("");
+  const [trendsData, setTrendsData] = useState<Array<{ month: string; rentalCount: number }>>([]);
+  const [surgeData, setSurgeData] = useState<
+    Array<{
+      period: string;
+      surgeMultiplier: number;
+      baselineRentals: number;
+      actualRentals: number;
+    }>
+  >([]);
+  const [recommendationLimit, setRecommendationLimit] = useState("5");
+  const [recommendationsData, setRecommendationsData] = useState<
+    Array<{ productId: number; name: string; score: number }>
+  >([]);
+  const [peakWindow, setPeakWindow] = useState<{
+    from: string;
+    to: string;
+    peakWindow: { start: string; end: string; totalRentals: number };
+  } | null>(null);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [isLoadingAnalytics, setIsLoadingAnalytics] = useState(false);
 
   const runKthBusiest = async () => {
     setIsLoadingKth(true);
@@ -754,12 +775,240 @@ export function Analytics() {
     }
   };
 
+  const loadAnalyticsEndpoints = async () => {
+    setIsLoadingAnalytics(true);
+    setAnalyticsError(null);
+    setTrendsData([]);
+    setSurgeData([]);
+    setRecommendationsData([]);
+    setPeakWindow(null);
+    try {
+      const categoryParam = analyticsCategory.trim();
+      const trendsQuery = categoryParam
+        ? `?category=${encodeURIComponent(categoryParam)}`
+        : "";
+      const surgeQuery = categoryParam
+        ? `?category=${encodeURIComponent(categoryParam)}`
+        : "";
+      const recommendationQuery = new URLSearchParams({
+        limit: recommendationLimit || "5",
+      });
+      if (categoryParam) recommendationQuery.set("category", categoryParam);
+
+      const [trendsResp, surgeResp, recommendationsResp, peakWindowResp] =
+        await Promise.all([
+          fetch(`/api/analytics/trends${trendsQuery}`, { cache: "no-store" }),
+          fetch(`/api/analytics/surge${surgeQuery}`, { cache: "no-store" }),
+          fetch(`/api/analytics/recommendations?${recommendationQuery.toString()}`, {
+            cache: "no-store",
+          }),
+          fetch(
+            `/api/analytics/peak-window?from=${encodeURIComponent(fromMonth)}&to=${encodeURIComponent(toMonth)}`,
+            { cache: "no-store" },
+          ),
+        ]);
+
+      if (!trendsResp.ok || !surgeResp.ok || !recommendationsResp.ok || !peakWindowResp.ok) {
+        setAnalyticsError("Could not load analytics endpoints right now.");
+        return;
+      }
+
+      const trendsPayload = (await trendsResp.json()) as {
+        trends?: Array<{ month?: string; rentalCount?: number }>;
+      };
+      const surgePayload = (await surgeResp.json()) as {
+        surges?: Array<{
+          period?: string;
+          surgeMultiplier?: number;
+          baselineRentals?: number;
+          actualRentals?: number;
+        }>;
+      };
+      const recommendationsPayload = (await recommendationsResp.json()) as {
+        recommendations?: Array<{ productId?: number; name?: string; score?: number }>;
+      };
+      const peakWindowPayload = (await peakWindowResp.json()) as {
+        from?: string;
+        to?: string;
+        peakWindow?: { start?: string; end?: string; totalRentals?: number };
+      };
+
+      setTrendsData(
+        (trendsPayload.trends ?? []).map((item) => ({
+          month: String(item.month ?? ""),
+          rentalCount: Number(item.rentalCount ?? 0),
+        })),
+      );
+      setSurgeData(
+        (surgePayload.surges ?? []).map((item) => ({
+          period: String(item.period ?? ""),
+          surgeMultiplier: Number(item.surgeMultiplier ?? 0),
+          baselineRentals: Number(item.baselineRentals ?? 0),
+          actualRentals: Number(item.actualRentals ?? 0),
+        })),
+      );
+      setRecommendationsData(
+        (recommendationsPayload.recommendations ?? []).map((item) => ({
+          productId: Number(item.productId ?? 0),
+          name: String(item.name ?? "Recommended product"),
+          score: Number(item.score ?? 0),
+        })),
+      );
+      if (peakWindowPayload.peakWindow) {
+        setPeakWindow({
+          from: String(peakWindowPayload.from ?? fromMonth),
+          to: String(peakWindowPayload.to ?? toMonth),
+          peakWindow: {
+            start: String(peakWindowPayload.peakWindow.start ?? ""),
+            end: String(peakWindowPayload.peakWindow.end ?? ""),
+            totalRentals: Number(peakWindowPayload.peakWindow.totalRentals ?? 0),
+          },
+        });
+      }
+    } catch {
+      setAnalyticsError("Could not load analytics endpoints right now.");
+    } finally {
+      setIsLoadingAnalytics(false);
+    }
+  };
+
   return (
     <div className="content">
       <PageHeader
         title="Rental Analytics"
-        desc="Explore demand patterns, peak rental windows, and surge days across RentPi."
+        desc="Explore rentals and analytics service endpoints from one workspace."
       />
+      <div className="card" style={{ marginBottom: 14 }}>
+        <h2 className="section-title">Analytics service endpoints</h2>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr 120px auto",
+            gap: 8,
+            marginBottom: 12,
+          }}
+        >
+          <div className="field">
+            <label className="field-label">Category (optional)</label>
+            <input
+              className="input"
+              value={analyticsCategory}
+              onChange={(e) => setAnalyticsCategory(e.target.value)}
+              placeholder="TOOLS"
+            />
+          </div>
+          <div className="field">
+            <label className="field-label">Recommendations limit</label>
+            <input
+              className="input"
+              value={recommendationLimit}
+              onChange={(e) => setRecommendationLimit(e.target.value)}
+              placeholder="5"
+              inputMode="numeric"
+            />
+          </div>
+          <div className="field">
+            <label className="field-label">&nbsp;</label>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => void loadAnalyticsEndpoints()}
+              disabled={isLoadingAnalytics}
+            >
+              {isLoadingAnalytics ? "Loading..." : "Load analytics"}
+            </button>
+          </div>
+        </div>
+        {analyticsError ? <div className="result-warn">{analyticsError}</div> : null}
+        {peakWindow ? (
+          <div className="result-success" style={{ marginBottom: 10 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>
+              Peak window: {peakWindow.peakWindow.start} → {peakWindow.peakWindow.end}
+            </div>
+            <div style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 4 }}>
+              Range {peakWindow.from} → {peakWindow.to} · total rentals:{" "}
+              {peakWindow.peakWindow.totalRentals}
+            </div>
+          </div>
+        ) : null}
+        {trendsData.length > 0 ? (
+          <div style={{ marginBottom: 10 }}>
+            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>
+              TRENDS
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {trendsData.map((item) => (
+                <div
+                  key={item.month}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                  }}
+                >
+                  <span>{item.month}</span>
+                  <span className="mono">{item.rentalCount}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {surgeData.length > 0 ? (
+          <div style={{ marginBottom: 10 }}>
+            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>
+              SURGE
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {surgeData.map((item) => (
+                <div
+                  key={`${item.period}-${item.actualRentals}`}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                  }}
+                >
+                  <span>{item.period}</span>
+                  <span className="mono">
+                    x{item.surgeMultiplier} ({item.actualRentals}/{item.baselineRentals})
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {recommendationsData.length > 0 ? (
+          <div>
+            <div className="mono" style={{ fontSize: 11, color: "var(--text-3)", marginBottom: 6 }}>
+              RECOMMENDATIONS
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+              {recommendationsData.map((item) => (
+                <div
+                  key={`${item.productId}-${item.name}`}
+                  style={{
+                    display: "flex",
+                    justifyContent: "space-between",
+                    border: "1px solid var(--border)",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                  }}
+                >
+                  <span>
+                    {item.name} (#{item.productId})
+                  </span>
+                  <span className="mono">{item.score.toFixed(2)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </div>
+
       <div className="card" style={{ marginBottom: 14 }}>
         <h2 className="section-title">Kth busiest date</h2>
         <div
@@ -890,70 +1139,6 @@ export function Analytics() {
         ) : null}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 14 }}>
-        <div className="card">
-          <h2 className="section-title">Peak window</h2>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr auto",
-              gap: 8,
-              marginBottom: 14,
-            }}
-          >
-            <div className="field">
-              <label className="field-label">From</label>
-              <select className="select" defaultValue="Jan 2026">
-                <option>Jan 2026</option>
-                <option>Feb 2026</option>
-                <option>Mar 2026</option>
-              </select>
-            </div>
-            <div className="field">
-              <label className="field-label">To</label>
-              <select className="select" defaultValue="Apr 2026">
-                <option>Apr 2026</option>
-                <option>May 2026</option>
-                <option>Jun 2026</option>
-              </select>
-            </div>
-            <div className="field">
-              <label className="field-label">&nbsp;</label>
-              <button type="button" className="btn btn-primary">
-                Analyze
-              </button>
-            </div>
-          </div>
-          <div className="result-success">
-            <div
-              className="mono"
-              style={{
-                fontSize: 10.5,
-                color: "var(--accent-deep)",
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                marginBottom: 6,
-              }}
-            >
-              Strongest 7-day window
-            </div>
-            <div
-              style={{
-                fontSize: 22,
-                fontWeight: 600,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              Mar 10 — Mar 16
-            </div>
-            <div
-              style={{ fontSize: 12.5, color: "var(--text-2)", marginTop: 4 }}
-            >
-              2,847 rentals · 41% above weekly average
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

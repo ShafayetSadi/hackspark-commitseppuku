@@ -26,7 +26,6 @@ export function Chat() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
-  const sessionCounterRef = useRef(0);
 
   useEffect(() => {
     const loadSessions = async () => {
@@ -38,15 +37,22 @@ export function Chat() {
             sessionId?: string;
             session_id?: string;
             name?: string;
+            title?: string;
             lastMessageAt?: string;
             updated_at?: string;
+            created_at?: string;
+            message_count?: number;
           }>;
         };
         const next = (payload.sessions ?? [])
           .map((s) => ({
             id: s.sessionId ?? s.session_id ?? "",
-            title: s.name ?? "Untitled chat",
-            time: s.lastMessageAt ?? s.updated_at ?? "recent",
+            title: s.name ?? s.title ?? "Untitled chat",
+            time:
+              s.lastMessageAt ??
+              s.updated_at ??
+              s.created_at ??
+              (typeof s.message_count === "number" ? `${s.message_count} messages` : "recent"),
           }))
           .filter((s) => s.id.length > 0);
         if (next.length > 0) setSessions(next);
@@ -74,30 +80,14 @@ export function Chat() {
     setInput("");
     setLoading(true);
 
-    let sessionId = activeSession;
-    if (!sessionId) {
-      // Use a monotonically-increasing ref for session ids so we don't have
-      // to call `Date.now()` (which the React purity lint rule flags inside
-      // component bodies).
-      sessionCounterRef.current += 1;
-      sessionId = `new-${sessionCounterRef.current}`;
-      const newSess: ChatSession = {
-        id: sessionId,
-        title:
-          content.slice(0, 40) + (content.length > 40 ? "…" : ""),
-        time: "just now",
-      };
-      setSessions((prev) => [newSess, ...prev]);
-      setActiveSession(sessionId);
-    }
-
     try {
       const response = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          sessionId,
-          message: content,
+          query: content,
+          top_k: 3,
+          session_id: activeSession,
         }),
       });
 
@@ -105,12 +95,29 @@ export function Chat() {
       if (response.ok) {
         const payload = (await response.json()) as {
           sessionId?: string;
+          session_id?: string;
           reply?: string;
           answer?: string;
           message?: string;
         };
-        if (payload.sessionId && payload.sessionId !== sessionId) {
-          setActiveSession(payload.sessionId);
+        const returnedSessionId = payload.session_id ?? payload.sessionId ?? null;
+        if (returnedSessionId) {
+          setActiveSession(returnedSessionId);
+          const title = content.slice(0, 40) + (content.length > 40 ? "…" : "");
+          setSessions((prev) => {
+            const existing = prev.find((s) => s.id === returnedSessionId);
+            if (existing) {
+              return prev.map((s) =>
+                s.id === returnedSessionId ? { ...s, time: "just now" } : s,
+              );
+            }
+            const nextSession: ChatSession = {
+              id: returnedSessionId,
+              title,
+              time: "just now",
+            };
+            return [nextSession, ...prev];
+          });
         }
         reply =
           payload.reply ||
@@ -122,6 +129,15 @@ export function Chat() {
         ...newMessages,
         { role: "assistant", content: reply },
       ]);
+      if (!response.ok && response.status === 401) {
+        setMessages([
+          ...newMessages,
+          {
+            role: "assistant",
+            content: "You are not authenticated. Please log in again and retry.",
+          },
+        ]);
+      }
     } catch {
       setMessages([
         ...newMessages,

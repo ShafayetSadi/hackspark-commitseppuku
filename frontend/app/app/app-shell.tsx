@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { CategoryFilter, PageId } from "./data";
 import { Availability, Trending } from "./components/page-availability";
@@ -23,6 +23,21 @@ type AppShellProps = {
   initialUser: AppUser;
 };
 
+const PAGE_CHECKPOINT_KEY = "rentpi:last-page";
+const PAGE_IDS: ReadonlySet<PageId> = new Set([
+  "dashboard",
+  "products",
+  "availability",
+  "trending",
+  "chat",
+  "profile",
+  "analytics",
+]);
+
+function isPageId(value: string): value is PageId {
+  return PAGE_IDS.has(value as PageId);
+}
+
 function initialsFor(name: string | undefined): string {
   if (!name) return "U";
   const parts = name.trim().split(/\s+/);
@@ -35,6 +50,25 @@ export default function AppShell({ initialUser }: AppShellProps) {
   const [page, setPage] = useState<PageId>("dashboard");
   const [filterCategory, setFilterCategory] =
     useState<CategoryFilter>("All");
+
+  useEffect(() => {
+    try {
+      const checkpoint = window.localStorage.getItem(PAGE_CHECKPOINT_KEY);
+      if (checkpoint && isPageId(checkpoint)) {
+        setPage(checkpoint);
+      }
+    } catch {
+      // Ignore storage errors (e.g., disabled storage).
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(PAGE_CHECKPOINT_KEY, page);
+    } catch {
+      // Ignore storage errors (e.g., disabled storage).
+    }
+  }, [page]);
 
   const userInitials = initialsFor(initialUser?.full_name);
   const userName = initialUser.full_name;

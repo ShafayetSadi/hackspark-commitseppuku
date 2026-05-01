@@ -6,11 +6,7 @@ import {
   readErrorDetail,
 } from "@/lib/auth-service";
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ id: string }> },
-) {
-  const { id } = await params;
+export async function GET(request: NextRequest) {
   const query = request.nextUrl.searchParams.toString();
   const suffix = query ? `?${query}` : "";
   const token = request.cookies.get(AUTH_TOKEN_COOKIE)?.value;
@@ -18,14 +14,11 @@ export async function GET(
     ? { Authorization: `Bearer ${token}` }
     : {};
   try {
-    const upstream = await fetch(
-      `${getGatewayUrl()}/rentals/users/${id}/top-categories${suffix}`,
-      {
-        method: "GET",
-        cache: "no-store",
-        headers,
-      },
-    );
+    const upstream = await fetch(`${getGatewayUrl()}/analytics/peak-window${suffix}`, {
+      method: "GET",
+      cache: "no-store",
+      headers,
+    });
     if (!upstream.ok) {
       return NextResponse.json(
         { detail: await readErrorDetail(upstream) },
@@ -35,7 +28,7 @@ export async function GET(
     return NextResponse.json(await upstream.json());
   } catch {
     return NextResponse.json(
-      { detail: "Top categories are unavailable right now." },
+      { detail: "Peak window analytics are unavailable right now." },
       { status: 503 },
     );
   }
