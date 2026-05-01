@@ -1,5 +1,6 @@
 import asyncio
 import json
+from typing import Any, cast
 
 import grpc
 import httpx
@@ -13,6 +14,17 @@ from shared.app_core.grpc_errors import grpc_to_http_exception
 from shared.grpc_gen import agentic_pb2, analytics_pb2, rental_pb2, user_pb2
 
 router = APIRouter()
+AGENTIC_PB2 = cast(Any, agentic_pb2)
+ANALYTICS_PB2 = cast(Any, analytics_pb2)
+RENTAL_PB2 = cast(Any, rental_pb2)
+USER_PB2 = cast(Any, user_pb2)
+
+
+def _parse_query_int(value: str, *, field_name: str) -> int:
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid {field_name}") from exc
 
 
 # ── Health / Status ─────────────────────────────────────────────────────────
@@ -75,7 +87,7 @@ async def health() -> dict:
 
 class RegisterBody(BaseModel):
     email: str
-    password: str
+    password: str = Field(min_length=8, max_length=128)
     name: str = Field(
         min_length=2,
         max_length=255,
@@ -92,8 +104,8 @@ class LoginBody(BaseModel):
 async def register(body: RegisterBody, settings: GatewaySettings = Depends(get_settings)):
     stub = user_client.get_stub(settings.user_service_addr)
     try:
-        resp: user_pb2.AuthResponse = await stub.Register(
-            user_pb2.RegisterRequest(email=body.email, password=body.password, full_name=body.name)
+        resp = await stub.Register(
+            USER_PB2.RegisterRequest(email=body.email, password=body.password, full_name=body.name)
         )
         return {"access_token": resp.access_token, "token_type": resp.token_type}
     except grpc.RpcError as exc:
@@ -104,9 +116,7 @@ async def register(body: RegisterBody, settings: GatewaySettings = Depends(get_s
 async def login(body: LoginBody, settings: GatewaySettings = Depends(get_settings)):
     stub = user_client.get_stub(settings.user_service_addr)
     try:
-        resp: user_pb2.AuthResponse = await stub.Login(
-            user_pb2.LoginRequest(email=body.email, password=body.password)
-        )
+        resp = await stub.Login(USER_PB2.LoginRequest(email=body.email, password=body.password))
         return {"access_token": resp.access_token, "token_type": resp.token_type}
     except grpc.RpcError as exc:
         raise grpc_to_http_exception(exc) from exc
@@ -119,8 +129,22 @@ async def me(request: Request, settings: GatewaySettings = Depends(get_settings)
         raise HTTPException(status_code=401, detail="Not authenticated")
     stub = user_client.get_stub(settings.user_service_addr)
     try:
-        resp: user_pb2.UserResponse = await stub.Me(user_pb2.MeRequest(user_id=str(user_id)))
+        resp = await stub.Me(USER_PB2.MeRequest(user_id=str(user_id)))
         return {"id": resp.id, "email": resp.email, "name": resp.full_name}
+    except grpc.RpcError as exc:
+        raise grpc_to_http_exception(exc) from exc
+
+
+@router.get("/users/{user_id}/discount")
+async def discount(user_id: int, settings: GatewaySettings = Depends(get_settings)):
+    stub = user_client.get_stub(settings.user_service_addr)
+    try:
+        resp = await stub.GetDiscount(USER_PB2.DiscountRequest(user_id=user_id))
+        return {
+            "userId": resp.user_id,
+            "securityScore": resp.security_score,
+            "discountPercent": resp.discount_percent,
+        }
     except grpc.RpcError as exc:
         raise grpc_to_http_exception(exc) from exc
 
@@ -133,8 +157,8 @@ async def list_products(request: Request, settings: GatewaySettings = Depends(ge
     params = dict(request.query_params)
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
-        resp: rental_pb2.ProductsResponse = await stub.ListProducts(
-            rental_pb2.ProductsQuery(
+        resp = await stub.ListProducts(
+            RENTAL_PB2.ProductsQuery(
                 category=params.get("category", ""),
                 page=params.get("page", ""),
                 limit=params.get("limit", ""),
@@ -149,10 +173,106 @@ async def list_products(request: Request, settings: GatewaySettings = Depends(ge
 async def get_product(product_id: int, settings: GatewaySettings = Depends(get_settings)):
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
-        resp: rental_pb2.ProductResponse = await stub.GetProduct(
-            rental_pb2.GetProductRequest(product_id=product_id)
-        )
+        resp = await stub.GetProduct(RENTAL_PB2.GetProductRequest(product_id=product_id))
         return JSONResponse(content=json.loads(resp.json_data))
+    except grpc.RpcError as exc:
+        raise grpc_to_http_exception(exc) from exc
+
+
+@router.get("/rentals/products/{product_id}/availability")
+async def get_product_availability(
+    product_id: int,
+    request: Request,
+    settings: GatewaySettings = Depends(get_settings),
+):
+    from_date = request.query_params.get("from", "")
+    to_date = request.query_params.get("to", "")
+    stub = rental_client.get_stub(settings.rental_service_addr)
+    try:
+        resp = await stub.GetAvailability(
+            RENTAL_PB2.AvailabilityRequest(
+                product_id=product_id,
+                from_date=from_date,
+                to_date=to_date,
+            )
+        )
+        return {
+            "productId": resp.product_id,
+            "from": resp.from_date,
+            "to": resp.to_date,
+            "available": resp.available,
+            "busyPeriods": [{"start": item.start, "end": item.end} for item in resp.busy_periods],
+            "freeWindows": [{"start": item.start, "end": item.end} for item in resp.free_windows],
+        }
+    except grpc.RpcError as exc:
+        raise grpc_to_http_exception(exc) from exc
+
+
+@router.get("/rentals/kth-busiest-date")
+async def kth_busiest_date(request: Request, settings: GatewaySettings = Depends(get_settings)):
+    from_month = request.query_params.get("from", "")
+    to_month = request.query_params.get("to", "")
+    k = _parse_query_int(request.query_params.get("k", "0"), field_name="k")
+    stub = rental_client.get_stub(settings.rental_service_addr)
+    try:
+        resp = await stub.GetKthBusiestDate(
+            RENTAL_PB2.KthBusiestDateRequest(from_month=from_month, to_month=to_month, k=k)
+        )
+        return {
+            "from": resp.from_month,
+            "to": resp.to_month,
+            "k": resp.k,
+            "date": resp.date,
+            "rentalCount": resp.rental_count,
+        }
+    except grpc.RpcError as exc:
+        raise grpc_to_http_exception(exc) from exc
+
+
+@router.get("/rentals/users/{user_id}/top-categories")
+async def top_categories(
+    user_id: int,
+    request: Request,
+    settings: GatewaySettings = Depends(get_settings),
+):
+    k = _parse_query_int(request.query_params.get("k", "5"), field_name="k")
+    stub = rental_client.get_stub(settings.rental_service_addr)
+    try:
+        resp = await stub.GetUserTopCategories(
+            RENTAL_PB2.UserTopCategoriesRequest(user_id=user_id, k=k)
+        )
+        return {
+            "userId": resp.user_id,
+            "topCategories": [
+                {"category": item.category, "rentalCount": item.rental_count}
+                for item in resp.top_categories
+            ],
+        }
+    except grpc.RpcError as exc:
+        raise grpc_to_http_exception(exc) from exc
+
+
+@router.get("/rentals/products/{product_id}/free-streak")
+async def free_streak(
+    product_id: int,
+    request: Request,
+    settings: GatewaySettings = Depends(get_settings),
+):
+    year = _parse_query_int(request.query_params.get("year", "0"), field_name="year")
+    stub = rental_client.get_stub(settings.rental_service_addr)
+    try:
+        resp = await stub.GetLongestFreeStreak(
+            RENTAL_PB2.LongestFreeStreakRequest(product_id=product_id, year=year)
+        )
+        return {
+            "productId": resp.product_id,
+            "year": resp.year,
+            "longestFreeStreak": {
+                "from": resp.longest_free_streak.from_date,
+                "to": resp.longest_free_streak.to_date,
+                "days": resp.longest_free_streak.days,
+            },
+        }
     except grpc.RpcError as exc:
         raise grpc_to_http_exception(exc) from exc
 
@@ -165,9 +285,7 @@ async def get_trends(request: Request, settings: GatewaySettings = Depends(get_s
     category = request.query_params.get("category", "")
     stub = analytics_client.get_stub(settings.analytics_service_addr)
     try:
-        resp: analytics_pb2.AnalyticsResponse = await stub.GetTrends(
-            analytics_pb2.TrendsRequest(category=category)
-        )
+        resp = await stub.GetTrends(ANALYTICS_PB2.TrendsRequest(category=category))
         return JSONResponse(content=json.loads(resp.json_data))
     except grpc.RpcError as exc:
         raise grpc_to_http_exception(exc) from exc
@@ -178,9 +296,7 @@ async def get_surge(request: Request, settings: GatewaySettings = Depends(get_se
     category = request.query_params.get("category", "")
     stub = analytics_client.get_stub(settings.analytics_service_addr)
     try:
-        resp: analytics_pb2.AnalyticsResponse = await stub.GetSurge(
-            analytics_pb2.SurgeRequest(category=category)
-        )
+        resp = await stub.GetSurge(ANALYTICS_PB2.SurgeRequest(category=category))
         return JSONResponse(content=json.loads(resp.json_data))
     except grpc.RpcError as exc:
         raise grpc_to_http_exception(exc) from exc
@@ -192,8 +308,8 @@ async def get_recommendations(request: Request, settings: GatewaySettings = Depe
     limit = int(request.query_params.get("limit", "5"))
     stub = analytics_client.get_stub(settings.analytics_service_addr)
     try:
-        resp: analytics_pb2.AnalyticsResponse = await stub.GetRecommendations(
-            analytics_pb2.RecommendationsRequest(category=category, limit=limit)
+        resp = await stub.GetRecommendations(
+            ANALYTICS_PB2.RecommendationsRequest(category=category, limit=limit)
         )
         return JSONResponse(content=json.loads(resp.json_data))
     except grpc.RpcError as exc:
@@ -213,8 +329,8 @@ class ChatBody(BaseModel):
 async def chat(body: ChatBody, settings: GatewaySettings = Depends(get_settings)):
     stub = agentic_client.get_stub(settings.agentic_service_addr)
     try:
-        resp: agentic_pb2.ChatResponse = await stub.Chat(
-            agentic_pb2.ChatRequest(query=body.query, top_k=body.top_k, session_id=body.session_id)
+        resp = await stub.Chat(
+            AGENTIC_PB2.ChatRequest(query=body.query, top_k=body.top_k, session_id=body.session_id)
         )
         return {
             "answer": resp.answer,

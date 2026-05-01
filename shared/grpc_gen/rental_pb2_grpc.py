@@ -44,6 +44,26 @@ class RentalServiceStub(object):
                 request_serializer=rental__pb2.GetProductRequest.SerializeToString,
                 response_deserializer=rental__pb2.ProductResponse.FromString,
                 _registered_method=True)
+        self.GetAvailability = channel.unary_unary(
+                '/rental.RentalService/GetAvailability',
+                request_serializer=rental__pb2.AvailabilityRequest.SerializeToString,
+                response_deserializer=rental__pb2.AvailabilityResponse.FromString,
+                _registered_method=True)
+        self.GetKthBusiestDate = channel.unary_unary(
+                '/rental.RentalService/GetKthBusiestDate',
+                request_serializer=rental__pb2.KthBusiestDateRequest.SerializeToString,
+                response_deserializer=rental__pb2.KthBusiestDateResponse.FromString,
+                _registered_method=True)
+        self.GetUserTopCategories = channel.unary_unary(
+                '/rental.RentalService/GetUserTopCategories',
+                request_serializer=rental__pb2.UserTopCategoriesRequest.SerializeToString,
+                response_deserializer=rental__pb2.UserTopCategoriesResponse.FromString,
+                _registered_method=True)
+        self.GetLongestFreeStreak = channel.unary_unary(
+                '/rental.RentalService/GetLongestFreeStreak',
+                request_serializer=rental__pb2.LongestFreeStreakRequest.SerializeToString,
+                response_deserializer=rental__pb2.LongestFreeStreakResponse.FromString,
+                _registered_method=True)
 
 
 class RentalServiceServicer(object):
@@ -61,6 +81,30 @@ class RentalServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetAvailability(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetKthBusiestDate(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetUserTopCategories(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def GetLongestFreeStreak(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_RentalServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -73,6 +117,26 @@ def add_RentalServiceServicer_to_server(servicer, server):
                     servicer.GetProduct,
                     request_deserializer=rental__pb2.GetProductRequest.FromString,
                     response_serializer=rental__pb2.ProductResponse.SerializeToString,
+            ),
+            'GetAvailability': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetAvailability,
+                    request_deserializer=rental__pb2.AvailabilityRequest.FromString,
+                    response_serializer=rental__pb2.AvailabilityResponse.SerializeToString,
+            ),
+            'GetKthBusiestDate': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetKthBusiestDate,
+                    request_deserializer=rental__pb2.KthBusiestDateRequest.FromString,
+                    response_serializer=rental__pb2.KthBusiestDateResponse.SerializeToString,
+            ),
+            'GetUserTopCategories': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetUserTopCategories,
+                    request_deserializer=rental__pb2.UserTopCategoriesRequest.FromString,
+                    response_serializer=rental__pb2.UserTopCategoriesResponse.SerializeToString,
+            ),
+            'GetLongestFreeStreak': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetLongestFreeStreak,
+                    request_deserializer=rental__pb2.LongestFreeStreakRequest.FromString,
+                    response_serializer=rental__pb2.LongestFreeStreakResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -129,6 +193,114 @@ class RentalService(object):
             '/rental.RentalService/GetProduct',
             rental__pb2.GetProductRequest.SerializeToString,
             rental__pb2.ProductResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetAvailability(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rental.RentalService/GetAvailability',
+            rental__pb2.AvailabilityRequest.SerializeToString,
+            rental__pb2.AvailabilityResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetKthBusiestDate(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rental.RentalService/GetKthBusiestDate',
+            rental__pb2.KthBusiestDateRequest.SerializeToString,
+            rental__pb2.KthBusiestDateResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetUserTopCategories(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rental.RentalService/GetUserTopCategories',
+            rental__pb2.UserTopCategoriesRequest.SerializeToString,
+            rental__pb2.UserTopCategoriesResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetLongestFreeStreak(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/rental.RentalService/GetLongestFreeStreak',
+            rental__pb2.LongestFreeStreakRequest.SerializeToString,
+            rental__pb2.LongestFreeStreakResponse.FromString,
             options,
             channel_credentials,
             insecure,

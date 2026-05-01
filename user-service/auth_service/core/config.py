@@ -7,6 +7,8 @@ class AuthSettings(CommonSettings):
     service_name: str = "user-service"
     service_port: int = 8001
     grpc_port: int = 50051
+    central_api_url: str = "https://technocracy.brittoo.xyz"
+    central_api_token: str = ""
 
 
 @lru_cache

@@ -1,4 +1,5 @@
 """Unit tests for RAG retrieval and mock LLM — no MongoDB, no real LLM needed."""
+# ruff: noqa: E402
 
 import sys
 from pathlib import Path

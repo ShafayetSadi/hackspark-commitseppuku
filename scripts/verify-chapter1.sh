@@ -378,10 +378,21 @@ else
   fail "compose healthchecks do not reference /status"
 fi
 
-if grep -q "postgres_data" "$config_file" && grep -q "mongo_data" "$config_file"; then
-  pass "named volumes for postgres and mongodb are configured"
+has_postgres_volume=0
+has_agent_store_volume=0
+
+if grep -q "postgres_data" "$config_file"; then
+  has_postgres_volume=1
+fi
+
+if grep -q "redis_data" "$config_file" || grep -q "mongo_data" "$config_file"; then
+  has_agent_store_volume=1
+fi
+
+if [ "$has_postgres_volume" -eq 1 ] && [ "$has_agent_store_volume" -eq 1 ]; then
+  pass "named volumes for postgres and agent store are configured"
 else
-  fail "named volumes for postgres and mongodb are missing from compose config"
+  fail "named volumes for postgres and the configured agent store are missing from compose config"
 fi
 
 for dockerfile in \

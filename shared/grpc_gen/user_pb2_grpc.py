@@ -49,6 +49,11 @@ class UserServiceStub(object):
                 request_serializer=user__pb2.MeRequest.SerializeToString,
                 response_deserializer=user__pb2.UserResponse.FromString,
                 _registered_method=True)
+        self.GetDiscount = channel.unary_unary(
+                '/user.UserService/GetDiscount',
+                request_serializer=user__pb2.DiscountRequest.SerializeToString,
+                response_deserializer=user__pb2.DiscountResponse.FromString,
+                _registered_method=True)
 
 
 class UserServiceServicer(object):
@@ -72,6 +77,12 @@ class UserServiceServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetDiscount(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_UserServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -89,6 +100,11 @@ def add_UserServiceServicer_to_server(servicer, server):
                     servicer.Me,
                     request_deserializer=user__pb2.MeRequest.FromString,
                     response_serializer=user__pb2.UserResponse.SerializeToString,
+            ),
+            'GetDiscount': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDiscount,
+                    request_deserializer=user__pb2.DiscountRequest.FromString,
+                    response_serializer=user__pb2.DiscountResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -172,6 +188,33 @@ class UserService(object):
             '/user.UserService/Me',
             user__pb2.MeRequest.SerializeToString,
             user__pb2.UserResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDiscount(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/user.UserService/GetDiscount',
+            user__pb2.DiscountRequest.SerializeToString,
+            user__pb2.DiscountResponse.FromString,
             options,
             channel_credentials,
             insecure,

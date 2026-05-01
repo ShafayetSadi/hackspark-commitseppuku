@@ -5,6 +5,10 @@ package rental;
 service RentalService {
   rpc ListProducts(ProductsQuery) returns (ProductsResponse);
   rpc GetProduct(GetProductRequest) returns (ProductResponse);
+  rpc GetAvailability(AvailabilityRequest) returns (AvailabilityResponse);
+  rpc GetKthBusiestDate(KthBusiestDateRequest) returns (KthBusiestDateResponse);
+  rpc GetUserTopCategories(UserTopCategoriesRequest) returns (UserTopCategoriesResponse);
+  rpc GetLongestFreeStreak(LongestFreeStreakRequest) returns (LongestFreeStreakResponse);
 }
 
 message ProductsQuery {
@@ -24,4 +28,70 @@ message ProductsResponse {
 
 message ProductResponse {
   string json_data = 1;
+}
+
+message AvailabilityRequest {
+  int32 product_id = 1;
+  string from_date = 2;
+  string to_date = 3;
+}
+
+message DateRange {
+  string start = 1;
+  string end = 2;
+}
+
+message AvailabilityResponse {
+  int32 product_id = 1;
+  string from_date = 2;
+  string to_date = 3;
+  bool available = 4;
+  repeated DateRange busy_periods = 5;
+  repeated DateRange free_windows = 6;
+}
+
+message KthBusiestDateRequest {
+  string from_month = 1;
+  string to_month = 2;
+  int32 k = 3;
+}
+
+message KthBusiestDateResponse {
+  string from_month = 1;
+  string to_month = 2;
+  int32 k = 3;
+  string date = 4;
+  int32 rental_count = 5;
+}
+
+message UserTopCategoriesRequest {
+  int32 user_id = 1;
+  int32 k = 2;
+}
+
+message CategoryCount {
+  string category = 1;
+  int32 rental_count = 2;
+}
+
+message UserTopCategoriesResponse {
+  int32 user_id = 1;
+  repeated CategoryCount top_categories = 2;
+}
+
+message LongestFreeStreakRequest {
+  int32 product_id = 1;
+  int32 year = 2;
+}
+
+message FreeStreak {
+  string from_date = 1;
+  string to_date = 2;
+  int32 days = 3;
+}
+
+message LongestFreeStreakResponse {
+  int32 product_id = 1;
+  int32 year = 2;
+  FreeStreak longest_free_streak = 3;
 }
