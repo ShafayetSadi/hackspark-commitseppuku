@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import grpc
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from gateway.core.config import GatewaySettings, get_settings
 from gateway.grpc_clients import agentic_client, analytics_client, rental_client, user_client
@@ -190,11 +190,10 @@ async def get_product(product_id: int, settings: GatewaySettings = Depends(get_s
 @router.get("/rentals/products/{product_id}/availability")
 async def get_product_availability(
     product_id: int,
-    request: Request,
+    from_date: str = Query(alias="from"),
+    to_date: str = Query(alias="to"),
     settings: GatewaySettings = Depends(get_settings),
 ):
-    from_date = request.query_params.get("from", "")
-    to_date = request.query_params.get("to", "")
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
         resp = await stub.GetAvailability(

@@ -80,7 +80,8 @@ async def test_gateway_availability_route_maps_request_and_response(gateway_runt
     settings = gateway_runtime.core_config.get_settings()
     response = await gateway_runtime.api_routes.get_product_availability(
         42,
-        build_request("/rentals/products/42/availability", "from=2024-03-01&to=2024-03-14"),
+        from_date="2024-03-01",
+        to_date="2024-03-14",
         settings=settings,
     )
     assert response == {
