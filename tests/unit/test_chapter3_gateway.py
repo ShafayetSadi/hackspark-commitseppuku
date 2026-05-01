@@ -96,3 +96,24 @@ async def test_gateway_merged_feed_route_maps_grpc_response(gateway_runtime, mon
             },
         ],
     }
+
+
+async def test_gateway_merged_feed_rejects_empty_product_id_segments(gateway_runtime, monkeypatch):
+    class Stub:
+        async def GetMergedFeed(self, _request):
+            raise AssertionError("gateway should reject invalid productIds before gRPC")
+
+    monkeypatch.setattr(gateway_runtime.api_routes.rental_client, "get_stub", lambda _addr: Stub())
+
+    settings = gateway_runtime.core_config.get_settings()
+
+    try:
+        await gateway_runtime.api_routes.merged_feed(
+            build_request("/rentals/merged-feed", "productIds=12,,88&limit=3"),
+            settings=settings,
+        )
+    except gateway_runtime.api_routes.HTTPException as exc:
+        assert exc.status_code == 400
+        assert exc.detail == "productIds must be 1-10 comma-separated integers"
+    else:
+        raise AssertionError("Expected HTTPException")
