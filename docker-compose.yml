@@ -97,7 +97,13 @@ services:
       SERVICE_PORT: 8004
       GRPC_PORT: 50054
       CENTRAL_API_REDIS_URL: ${CENTRAL_API_REDIS_URL:-redis://redis:6379/0}
+      RENTAL_SERVICE_ADDR: ${RENTAL_SERVICE_ADDR:-rental-service:50052}
+      ANALYTICS_SERVICE_ADDR: ${ANALYTICS_SERVICE_ADDR:-analytics-service:50053}
     depends_on:
+      rental-service:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:

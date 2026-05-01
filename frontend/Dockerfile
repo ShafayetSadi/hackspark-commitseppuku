@@ -8,6 +8,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 RUN npm run build
+RUN rm -rf .next/standalone/node_modules/@img .next/standalone/node_modules/sharp
 
 FROM gcr.io/distroless/nodejs22-debian12:nonroot AS runner
 WORKDIR /app

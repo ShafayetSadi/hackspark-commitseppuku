@@ -12,6 +12,8 @@ standalone contexts.
 
 import asyncio
 import hashlib
+import math
+import random
 import time
 import uuid
 from collections import deque
@@ -121,7 +123,9 @@ _redis_limiters: dict[_LimiterConfig, _RedisSlidingWindowLimiter] = {}
 _limiter_lock = asyncio.Lock()
 
 
-async def _get_limiter(config: _LimiterConfig) -> _RedisSlidingWindowLimiter | _SlidingWindowLimiter:
+async def _get_limiter(
+    config: _LimiterConfig,
+) -> _RedisSlidingWindowLimiter | _SlidingWindowLimiter:
     async with _limiter_lock:
         if config.redis_url:
             redis_limiter = _redis_limiters.get(config)
@@ -144,6 +148,8 @@ async def _get_limiter(config: _LimiterConfig) -> _RedisSlidingWindowLimiter | _
 
 class CentralAPIClient:
     """Rate-limited, error-normalising HTTP client for the Central API."""
+
+    _MAX_RETRIES = 3
 
     def __init__(
         self,
@@ -187,21 +193,66 @@ class CentralAPIClient:
         """Make a rate-limited GET to the Central API and return the parsed JSON body."""
         await self._acquire()
         url = f"{self._base}{path}"
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.get(url, params=params or {}, headers=self._headers())
-        except httpx.TimeoutException as exc:
-            raise HTTPException(status_code=504, detail="Central API timeout") from exc
-        except httpx.RequestError as exc:
-            raise HTTPException(status_code=502, detail="Central API unreachable") from exc
+        last_retry_after: int | None = None
 
-        if resp.status_code == 200:
-            return resp.json()
-        if resp.status_code == 404:
-            raise HTTPException(status_code=404, detail="Resource not found")
-        if resp.status_code == 429:
-            raise HTTPException(
-                status_code=429,
-                detail="Central API rate limit exceeded — should not happen; check limiter config",
-            )
-        raise HTTPException(status_code=502, detail=f"Central API error {resp.status_code}")
+        for retry_index in range(self._MAX_RETRIES + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    resp = await client.get(url, params=params or {}, headers=self._headers())
+            except httpx.TimeoutException as exc:
+                raise HTTPException(status_code=504, detail="Central API timeout") from exc
+            except httpx.RequestError as exc:
+                raise HTTPException(status_code=502, detail="Central API unreachable") from exc
+
+            if resp.status_code == 200:
+                return resp.json()
+            if resp.status_code == 404:
+                raise HTTPException(status_code=404, detail="Resource not found")
+            if resp.status_code == 429:
+                if retry_index == self._MAX_RETRIES:
+                    final_retry_after = last_retry_after or self._parse_retry_after(resp)
+                    raise HTTPException(
+                        status_code=503,
+                        detail={
+                            "error": "Central API unavailable after 3 retries",
+                            "lastRetryAfter": final_retry_after,
+                            "suggestion": (
+                                f"Try again in ~{max(1, math.ceil(final_retry_after / 60))} minutes"
+                            ),
+                        },
+                    )
+
+                retry_no = retry_index + 1
+                wait_seconds = self._compute_retry_wait_seconds(resp, retry_no)
+                last_retry_after = wait_seconds
+                print(
+                    f"[retry {retry_no}/3] waiting {wait_seconds}s before retrying GET {path}",
+                    flush=True,
+                )
+                await asyncio.sleep(wait_seconds)
+                await self._acquire()
+                continue
+
+            raise HTTPException(status_code=502, detail=f"Central API error {resp.status_code}")
+
+        raise HTTPException(status_code=503, detail="Central API unavailable")
+
+    def _parse_retry_after(self, resp: httpx.Response) -> int:
+        try:
+            payload = resp.json()
+        except ValueError:
+            return 1
+
+        retry_after = payload.get("retryAfterSeconds")
+        if isinstance(retry_after, (int, float)):
+            return max(1, int(round(retry_after)))
+        return 1
+
+    def _compute_retry_wait_seconds(self, resp: httpx.Response, retry_no: int) -> int:
+        base_retry_after = self._parse_retry_after(resp)
+        if retry_no == 1:
+            return base_retry_after
+
+        scaled_wait = base_retry_after * (2 ** (retry_no - 1))
+        jittered_wait = scaled_wait * random.uniform(0.8, 1.2)
+        return max(1, int(round(jittered_wait)))

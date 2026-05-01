@@ -23,7 +23,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
-COPY scripts ./scripts
+COPY scripts/start-user.sh ./scripts/start-user.sh
 COPY shared ./shared
 COPY user-service ./user-service
 

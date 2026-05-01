@@ -38,6 +38,7 @@ class RentalServicer(rental_pb2_grpc.RentalServiceServicer):
             401: grpc.StatusCode.UNAUTHENTICATED,
             409: grpc.StatusCode.ALREADY_EXISTS,
             429: grpc.StatusCode.RESOURCE_EXHAUSTED,
+            503: grpc.StatusCode.FAILED_PRECONDITION,
             502: grpc.StatusCode.UNAVAILABLE,
             504: grpc.StatusCode.DEADLINE_EXCEEDED,
         }

@@ -23,7 +23,7 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
-COPY scripts ./scripts
+COPY scripts/start-analytics.sh ./scripts/start-analytics.sh
 COPY shared ./shared
 COPY analytics-service ./analytics-service
 
