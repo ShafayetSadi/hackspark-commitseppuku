@@ -3,23 +3,77 @@
 import { useState } from "react";
 
 import {
-  BUSY_PERIODS,
-  type BusyPeriod,
   type CategoryFilter,
   type PageId,
-  PRODUCTS,
-  type Product,
   TRENDING,
 } from "../data";
 
 import { Badge, Icon, PageHeader, Placeholder } from "./primitives";
 
 type AvailabilityResult = {
-  product: Product | undefined;
-  busy: BusyPeriod[];
-  fromDay: number;
-  toDay: number;
-  conflicts: BusyPeriod[];
+  productId: number;
+  from: string;
+  to: string;
+  available: boolean;
+  busyPeriods: Array<{ start: string; end: string }>;
+  freeWindows: Array<{ start: string; end: string }>;
+  freeStreak: { from: string; to: string; days: number } | null;
+};
+
+function availabilityErrorMessage(status: number): string {
+  if (status === 400) return "Please choose a valid date range.";
+  if (status === 404) return "This product could not be found.";
+  if (status === 503) return "Availability data is unavailable right now.";
+  return "Could not check availability right now.";
+}
+
+function getYearFromDate(value: string): number {
+  const parsed = Number(value.slice(0, 4));
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : new Date().getFullYear();
+}
+
+function dateLabel(value: string): string {
+  if (!value) return value;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+function toTimelineValue(value: string): number {
+  if (!value) return 0;
+  const dayPart = value.split("-")[2];
+  return Number(dayPart ?? 0);
+}
+
+function timelineWidth(from: string, to: string): string {
+  const start = toTimelineValue(from);
+  const end = toTimelineValue(to);
+  if (start <= 0 || end <= 0 || end < start) return "0%";
+  return `${((end - start + 1) / 31) * 100}%`;
+}
+
+function timelineLeft(from: string): string {
+  const start = toTimelineValue(from);
+  if (start <= 0) return "0%";
+  return `${(start / 31) * 100}%`;
+}
+
+function normalizePeriods(
+  periods: Array<{ start?: unknown; end?: unknown }> | undefined,
+): Array<{ start: string; end: string }> {
+  if (!Array.isArray(periods)) return [];
+  return periods
+    .map((p) => ({
+      start: String(p.start ?? ""),
+      end: String(p.end ?? ""),
+    }))
+    .filter((p) => p.start.length > 0 && p.end.length > 0);
+}
+
+type AvailabilityPayload = {
+  productId?: number;
+  from?: string;
+  to?: string;
   available: boolean;
 };
 
@@ -29,28 +83,63 @@ export function Availability() {
   const [to, setTo] = useState("2026-05-15");
   const [result, setResult] = useState<AvailabilityResult | null>(null);
   const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const check = () => {
+  const check = async () => {
     setLoading(true);
+    setErrorMessage(null);
     setResult(null);
-    setTimeout(() => {
-      const id = parseInt(productId, 10);
-      const product = PRODUCTS.find((p) => p.id === id);
-      const busy =
-        BUSY_PERIODS[id] !== undefined ? BUSY_PERIODS[id] : BUSY_PERIODS[1042];
-      const fromDay = parseInt(from.split("-")[2] || "0", 10);
-      const toDay = parseInt(to.split("-")[2] || "0", 10);
-      const conflicts = busy.filter((b) => !(b.end < fromDay || b.start > toDay));
+    try {
+      const id = Number.parseInt(productId, 10);
+      if (!Number.isFinite(id) || id <= 0) {
+        setErrorMessage("Please enter a valid product ID.");
+        return;
+      }
+      const response = await fetch(
+        `/api/rentals/products/${id}/availability?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+        { cache: "no-store" },
+      );
+      if (!response.ok) {
+        setErrorMessage(availabilityErrorMessage(response.status));
+        return;
+      }
+      const payload = (await response.json()) as AvailabilityPayload & {
+        busyPeriods?: Array<{ start?: unknown; end?: unknown }>;
+        freeWindows?: Array<{ start?: unknown; end?: unknown }>;
+      };
+
+      let freeStreak: AvailabilityResult["freeStreak"] = null;
+      const streakResp = await fetch(
+        `/api/rentals/products/${id}/free-streak?year=${getYearFromDate(from)}`,
+        { cache: "no-store" },
+      );
+      if (streakResp.ok) {
+        const streakPayload = (await streakResp.json()) as {
+          longestFreeStreak?: { from?: string; to?: string; days?: number };
+        };
+        if (streakPayload.longestFreeStreak) {
+          freeStreak = {
+            from: String(streakPayload.longestFreeStreak.from ?? ""),
+            to: String(streakPayload.longestFreeStreak.to ?? ""),
+            days: Number(streakPayload.longestFreeStreak.days ?? 0),
+          };
+        }
+      }
+
       setResult({
-        product,
-        busy,
-        fromDay,
-        toDay,
-        conflicts,
-        available: conflicts.length === 0,
+        productId: Number(payload.productId ?? id),
+        from: String(payload.from ?? from),
+        to: String(payload.to ?? to),
+        available: Boolean(payload.available),
+        busyPeriods: normalizePeriods(payload.busyPeriods),
+        freeWindows: normalizePeriods(payload.freeWindows),
+        freeStreak,
       });
+    } catch {
+      setErrorMessage("Availability data is unavailable right now.");
+    } finally {
       setLoading(false);
-    }, 700);
+    }
   };
 
   return (
@@ -79,7 +168,7 @@ export function Availability() {
                 onChange={(e) => setProductId(e.target.value)}
                 placeholder="e.g. 1042"
               />
-              <div className="field-help">Try 1042, 1088, or 1156.</div>
+              <div className="field-help">Enter the product ID you want to check.</div>
             </div>
             <div
               style={{
@@ -113,7 +202,7 @@ export function Availability() {
             <button
               type="button"
               className="btn btn-accent"
-              onClick={check}
+              onClick={() => void check()}
               disabled={loading}
             >
               {loading ? "Checking…" : "Check Availability"}
@@ -122,6 +211,11 @@ export function Availability() {
         </div>
 
         <div className="card" style={{ minHeight: 320 }}>
+          {errorMessage ? (
+            <div className="result-warn" style={{ marginBottom: 14 }}>
+              <div style={{ fontSize: 13 }}>{errorMessage}</div>
+            </div>
+          ) : null}
           {!result && !loading ? (
             <div
               style={{
@@ -209,8 +303,8 @@ export function Availability() {
                 </div>
                 <div style={{ fontSize: 13, color: "var(--text-2)" }}>
                   {result.available
-                    ? `${result.product?.name || "This product"} is free for your selected dates.`
-                    : `${result.product?.name || "This product"} has bookings during your selected dates.`}
+                    ? "This product is free for your selected dates."
+                    : "This product has bookings during your selected dates."}
                 </div>
                 <div
                   style={{
@@ -234,7 +328,7 @@ export function Availability() {
                       Requested
                     </div>
                     <div>
-                      {from} → {to}
+                      {dateLabel(result.from)} → {dateLabel(result.to)}
                     </div>
                   </div>
                   <div>
@@ -251,32 +345,31 @@ export function Availability() {
                       Product
                     </div>
                     <div>
-                      #{productId}
-                      {result.product ? ` · ${result.product.name}` : ""}
+                      #{result.productId}
                     </div>
                   </div>
                 </div>
               </div>
 
-              <h3 className="section-title">May 2026 timeline</h3>
+              <h3 className="section-title">Timeline</h3>
               <div style={{ position: "relative", marginBottom: 6 }}>
                 <div className="timeline">
-                  {result.busy.map((b, i) => (
+                  {result.busyPeriods.map((b, i) => (
                     <div
                       key={i}
                       className="timeline-segment timeline-busy"
                       style={{
-                        left: `${(b.start / 31) * 100}%`,
-                        width: `${((b.end - b.start + 1) / 31) * 100}%`,
+                        left: timelineLeft(b.start),
+                        width: timelineWidth(b.start, b.end),
                       }}
-                      title={`${b.by} · day ${b.start}–${b.end}`}
+                      title={`${dateLabel(b.start)} → ${dateLabel(b.end)}`}
                     />
                   ))}
                   <div
                     className="timeline-requested"
                     style={{
-                      left: `${(result.fromDay / 31) * 100}%`,
-                      width: `${((result.toDay - result.fromDay + 1) / 31) * 100}%`,
+                      left: timelineLeft(result.from),
+                      width: timelineWidth(result.from, result.to),
                     }}
                   />
                 </div>
@@ -342,7 +435,7 @@ export function Availability() {
                 </span>
               </div>
 
-              {result.conflicts.length > 0 ? (
+              {result.busyPeriods.length > 0 ? (
                 <>
                   <h3 className="section-title" style={{ marginTop: 22 }}>
                     Busy periods
@@ -354,7 +447,7 @@ export function Availability() {
                       gap: 6,
                     }}
                   >
-                    {result.busy.map((b, i) => (
+                    {result.busyPeriods.map((b, i) => (
                       <div
                         key={i}
                         style={{
@@ -364,24 +457,62 @@ export function Availability() {
                           padding: "10px 12px",
                           border: "1px solid var(--border)",
                           borderRadius: 8,
-                          background: result.conflicts.includes(b)
-                            ? "var(--warn-soft)"
-                            : "var(--surface)",
+                          background: "var(--warn-soft)",
                         }}
                       >
                         <div style={{ fontSize: 12.5 }}>
-                          May {b.start} → May {b.end}
+                          {dateLabel(b.start)} → {dateLabel(b.end)}
                         </div>
-                        <div
-                          className="mono"
-                          style={{ fontSize: 11, color: "var(--text-3)" }}
-                        >
-                          {b.by}
+                        <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>
+                          Busy
                         </div>
                       </div>
                     ))}
                   </div>
                 </>
+              ) : null}
+
+              {result.freeWindows.length > 0 ? (
+                <>
+                  <h3 className="section-title" style={{ marginTop: 16 }}>
+                    Free windows
+                  </h3>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                    {result.freeWindows.map((w, i) => (
+                      <div
+                        key={i}
+                        style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "10px 12px",
+                          border: "1px solid var(--border)",
+                          borderRadius: 8,
+                          background: "var(--surface)",
+                        }}
+                      >
+                        <div style={{ fontSize: 12.5 }}>
+                          {dateLabel(w.start)} → {dateLabel(w.end)}
+                        </div>
+                        <div className="mono" style={{ fontSize: 11, color: "var(--text-3)" }}>
+                          Free
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
+
+              {result.freeStreak ? (
+                <div className="card" style={{ marginTop: 16, padding: 12 }}>
+                  <div className="mono" style={{ fontSize: 10.5, color: "var(--text-3)" }}>
+                    LONGEST FREE STREAK (YEAR)
+                  </div>
+                  <div style={{ fontSize: 13, marginTop: 4 }}>
+                    {dateLabel(result.freeStreak.from)} → {dateLabel(result.freeStreak.to)} (
+                    {result.freeStreak.days} days)
+                  </div>
+                </div>
               ) : null}
 
               <div style={{ marginTop: 20, display: "flex", gap: 8 }}>

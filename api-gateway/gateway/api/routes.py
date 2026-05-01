@@ -4,7 +4,7 @@ from typing import Any, cast
 
 import grpc
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import JSONResponse
 from gateway.core.config import GatewaySettings, get_settings
 from gateway.grpc_clients import agentic_client, analytics_client, rental_client, user_client
@@ -191,11 +191,10 @@ async def get_product(product_id: int, settings: GatewaySettings = Depends(get_s
 @router.get("/rentals/products/{product_id}/availability")
 async def get_product_availability(
     product_id: int,
-    request: Request,
+    from_date: str = Query(alias="from"),
+    to_date: str = Query(alias="to"),
     settings: GatewaySettings = Depends(get_settings),
 ):
-    from_date = request.query_params.get("from", "")
-    to_date = request.query_params.get("to", "")
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
         resp = await stub.GetAvailability(
@@ -218,14 +217,20 @@ async def get_product_availability(
 
 
 @router.get("/rentals/kth-busiest-date")
-async def kth_busiest_date(request: Request, settings: GatewaySettings = Depends(get_settings)):
-    from_month = request.query_params.get("from", "")
-    to_month = request.query_params.get("to", "")
-    k = _parse_query_int(request.query_params.get("k", "0"), field_name="k")
+async def kth_busiest_date(
+    from_month: str = Query(alias="from"),
+    to_month: str = Query(alias="to"),
+    k: int = Query(),
+    settings: GatewaySettings = Depends(get_settings),
+):
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
         resp = await stub.GetKthBusiestDate(
-            RENTAL_PB2.KthBusiestDateRequest(from_month=from_month, to_month=to_month, k=k)
+            RENTAL_PB2.KthBusiestDateRequest(
+                from_month=from_month,
+                to_month=to_month,
+                k=_parse_query_int(str(k), field_name="k"),
+            )
         )
         return {
             "from": resp.from_month,
@@ -241,14 +246,16 @@ async def kth_busiest_date(request: Request, settings: GatewaySettings = Depends
 @router.get("/rentals/users/{user_id}/top-categories")
 async def top_categories(
     user_id: int,
-    request: Request,
+    k: int = Query(default=5),
     settings: GatewaySettings = Depends(get_settings),
 ):
-    k = _parse_query_int(request.query_params.get("k", "5"), field_name="k")
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
         resp = await stub.GetUserTopCategories(
-            RENTAL_PB2.UserTopCategoriesRequest(user_id=user_id, k=k)
+            RENTAL_PB2.UserTopCategoriesRequest(
+                user_id=user_id,
+                k=_parse_query_int(str(k), field_name="k"),
+            )
         )
         return {
             "userId": resp.user_id,
@@ -264,14 +271,16 @@ async def top_categories(
 @router.get("/rentals/products/{product_id}/free-streak")
 async def free_streak(
     product_id: int,
-    request: Request,
+    year: int = Query(),
     settings: GatewaySettings = Depends(get_settings),
 ):
-    year = _parse_query_int(request.query_params.get("year", "0"), field_name="year")
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
         resp = await stub.GetLongestFreeStreak(
-            RENTAL_PB2.LongestFreeStreakRequest(product_id=product_id, year=year)
+            RENTAL_PB2.LongestFreeStreakRequest(
+                product_id=product_id,
+                year=_parse_query_int(str(year), field_name="year"),
+            )
         )
         return {
             "productId": resp.product_id,
@@ -287,9 +296,11 @@ async def free_streak(
 
 
 @router.get("/rentals/merged-feed")
-async def merged_feed(request: Request, settings: GatewaySettings = Depends(get_settings)):
-    product_ids = request.query_params.get("productIds", "")
-    limit = _parse_query_int(request.query_params.get("limit", "0"), field_name="limit")
+async def merged_feed(
+    product_ids: str = Query(alias="productIds"),
+    limit: int = Query(),
+    settings: GatewaySettings = Depends(get_settings),
+):
     stub = rental_client.get_stub(settings.rental_service_addr)
     try:
         product_id_parts = [value.strip() for value in product_ids.split(",")]
@@ -303,7 +314,7 @@ async def merged_feed(request: Request, settings: GatewaySettings = Depends(get_
                 product_ids=[
                     _parse_query_int(value, field_name="productIds") for value in product_id_parts
                 ],
-                limit=limit,
+                limit=_parse_query_int(str(limit), field_name="limit"),
             )
         )
         return {
@@ -327,8 +338,10 @@ async def merged_feed(request: Request, settings: GatewaySettings = Depends(get_
 
 
 @router.get("/analytics/trends")
-async def get_trends(request: Request, settings: GatewaySettings = Depends(get_settings)):
-    category = request.query_params.get("category", "")
+async def get_trends(
+    category: str = Query(default=""),
+    settings: GatewaySettings = Depends(get_settings),
+):
     stub = analytics_client.get_stub(settings.analytics_service_addr)
     try:
         resp = await stub.GetTrends(ANALYTICS_PB2.TrendsRequest(category=category))
@@ -338,8 +351,10 @@ async def get_trends(request: Request, settings: GatewaySettings = Depends(get_s
 
 
 @router.get("/analytics/surge")
-async def get_surge(request: Request, settings: GatewaySettings = Depends(get_settings)):
-    category = request.query_params.get("category", "")
+async def get_surge(
+    category: str = Query(default=""),
+    settings: GatewaySettings = Depends(get_settings),
+):
     stub = analytics_client.get_stub(settings.analytics_service_addr)
     try:
         resp = await stub.GetSurge(ANALYTICS_PB2.SurgeRequest(category=category))
@@ -349,13 +364,20 @@ async def get_surge(request: Request, settings: GatewaySettings = Depends(get_se
 
 
 @router.get("/analytics/recommendations")
-async def get_recommendations(request: Request, settings: GatewaySettings = Depends(get_settings)):
-    target_date = request.query_params.get("date", "")
-    limit = _parse_query_int(request.query_params.get("limit", "5"), field_name="limit")
+async def get_recommendations(
+    category: str = Query(default=""),
+    date: str = Query(default=""),
+    limit: int = Query(default=5),
+    settings: GatewaySettings = Depends(get_settings),
+):
     stub = analytics_client.get_stub(settings.analytics_service_addr)
     try:
         resp = await stub.GetRecommendations(
-            ANALYTICS_PB2.RecommendationsRequest(limit=limit, date=target_date),
+            ANALYTICS_PB2.RecommendationsRequest(
+                category=category,
+                limit=_parse_query_int(str(limit), field_name="limit"),
+                date=date,
+            ),
             timeout=ANALYTICS_RECOMMENDATIONS_GRPC_TIMEOUT_SECONDS,
         )
         return JSONResponse(content=json.loads(resp.json_data))
@@ -364,9 +386,11 @@ async def get_recommendations(request: Request, settings: GatewaySettings = Depe
 
 
 @router.get("/analytics/peak-window")
-async def get_peak_window(request: Request, settings: GatewaySettings = Depends(get_settings)):
-    from_month = request.query_params.get("from", "")
-    to_month = request.query_params.get("to", "")
+async def get_peak_window(
+    from_month: str = Query(alias="from"),
+    to_month: str = Query(alias="to"),
+    settings: GatewaySettings = Depends(get_settings),
+):
     stub = analytics_client.get_stub(settings.analytics_service_addr)
     try:
         resp = await stub.GetPeakWindow(
