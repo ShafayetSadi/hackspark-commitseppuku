@@ -21,6 +21,7 @@ class AIAgentSettings(CommonSettings):
     groq_model: str = "llama-3.1-8b-instant"
     central_api_url: str = "https://technocracy.brittoo.xyz"
     central_api_token: str = ""
+    rental_service_url: str = "http://rental-service:8002"
 
 
 @lru_cache

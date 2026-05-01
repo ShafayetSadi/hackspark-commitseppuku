@@ -1,6 +1,7 @@
 import time
 from dataclasses import dataclass
 
+import httpx
 from fastapi import HTTPException
 
 from ai_agent_service.core.config import AIAgentSettings
@@ -32,8 +33,8 @@ TOOL_SPECS = (
     ),
     ToolSpec(
         name="get_availability",
-        description="Returns inventory availability for a product or category.",
-        arguments=("subject",),
+        description="Returns rental availability for a specific product over a date range. Requires product_id (integer), from_date and to_date (YYYY-MM-DD).",
+        arguments=("product_id", "from_date", "to_date"),
     ),
     ToolSpec(
         name="get_recommendations",
@@ -110,11 +111,10 @@ async def execute_tool(
     if name == "get_top_category":
         result = await _fetch_top_category(settings)
     elif name == "get_availability":
-        result = {
-            "subject": _humanize_subject(subject or "inventory"),
-            "availability": data["availability"],
-            "restock_eta": "12-24 hours for depleted items",
-        }
+        product_id = normalized.get("product_id", "")
+        from_date = normalized.get("from_date", "")
+        to_date = normalized.get("to_date", "")
+        result = await _fetch_availability(settings, product_id, from_date, to_date)
     elif name == "get_recommendations":
         result = {
             "category": _humanize_subject(subject or "tools"),
@@ -224,6 +224,73 @@ async def _fetch_top_category(settings: AIAgentSettings) -> dict:
         "market_share": share,
         "note": f"Live data across {len(items)} categories.",
     }
+
+
+async def _fetch_availability(
+    settings: AIAgentSettings,
+    product_id: str,
+    from_date: str,
+    to_date: str,
+) -> dict:
+    if not product_id or not from_date or not to_date:
+        logger.warning(
+            "availability_missing_args",
+            product_id=product_id or None,
+            from_date=from_date or None,
+            to_date=to_date or None,
+        )
+        return {
+            "available": None,
+            "note": "Could not check availability: product_id, from_date, and to_date are all required.",
+        }
+
+    url = f"{settings.rental_service_url}/products/{product_id}/availability"
+    logger.info(
+        "rental_service_call_start",
+        url=url,
+        product_id=product_id,
+        from_date=from_date,
+        to_date=to_date,
+    )
+    t0 = time.monotonic()
+
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(url, params={"from": from_date, "to": to_date})
+    except httpx.TimeoutException:
+        logger.error("rental_service_timeout", url=url, elapsed_ms=round((time.monotonic() - t0) * 1000))
+        return {"available": None, "note": "Rental service timed out while checking availability."}
+    except httpx.RequestError as exc:
+        logger.error("rental_service_unreachable", url=url, error=str(exc))
+        return {"available": None, "note": "Rental service is unreachable."}
+
+    elapsed = round((time.monotonic() - t0) * 1000)
+
+    if resp.status_code == 404:
+        logger.warning("rental_service_product_not_found", product_id=product_id, elapsed_ms=elapsed)
+        return {"available": None, "note": f"Product {product_id} not found in rental service."}
+
+    if resp.status_code != 200:
+        logger.error(
+            "rental_service_error",
+            url=url,
+            status=resp.status_code,
+            elapsed_ms=elapsed,
+        )
+        return {"available": None, "note": f"Rental service returned error {resp.status_code}."}
+
+    data = resp.json()
+    logger.info(
+        "rental_service_call_ok",
+        product_id=product_id,
+        from_date=from_date,
+        to_date=to_date,
+        available=data.get("available"),
+        busy_periods=len(data.get("busyPeriods", [])),
+        free_windows=len(data.get("freeWindows", [])),
+        elapsed_ms=elapsed,
+    )
+    return data
 
 
 def _resolve_subject_data(subject: str) -> dict:
