@@ -23,7 +23,7 @@ The browser should call `/api/auth/*` (Next handlers), **not** backend services 
 Gateway/auth endpoints used by route handlers:
 
 - `POST /auth/register`
-- `POST /auth/login`
+- `POST /users/login`
 - `GET /auth/me`
 
 Token handling:

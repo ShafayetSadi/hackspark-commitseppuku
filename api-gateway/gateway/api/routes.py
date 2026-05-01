@@ -328,9 +328,9 @@ async def get_recommendations(request: Request, settings: GatewaySettings = Depe
 
 
 class ChatBody(BaseModel):
-    query: str = Field(min_length=5, max_length=1000)
+    query: str = Field(min_length=1, max_length=1000)
     top_k: int = Field(default=3, ge=1, le=5)
-    session_id: str = ""
+    session_id: str | None = None
 
 
 @router.post("/chat")
@@ -338,7 +338,11 @@ async def chat(body: ChatBody, settings: GatewaySettings = Depends(get_settings)
     stub = agentic_client.get_stub(settings.agentic_service_addr)
     try:
         resp = await stub.Chat(
-            AGENTIC_PB2.ChatRequest(query=body.query, top_k=body.top_k, session_id=body.session_id)
+            AGENTIC_PB2.ChatRequest(
+                query=body.query,
+                top_k=body.top_k,
+                session_id=body.session_id or "",
+            )
         )
         return {
             "answer": resp.answer,
@@ -348,3 +352,45 @@ async def chat(body: ChatBody, settings: GatewaySettings = Depends(get_settings)
         }
     except grpc.RpcError as exc:
         raise grpc_to_http_exception(exc) from exc
+
+
+@router.get("/chat/sessions")
+async def chat_sessions(settings: GatewaySettings = Depends(get_settings)):
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{settings.agentic_service_url}/chat/sessions")
+            response.raise_for_status()
+        return JSONResponse(status_code=response.status_code, content=response.json())
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text or "Agentic service returned an error"
+        raise HTTPException(status_code=exc.response.status_code, detail=detail) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="Agentic service unavailable") from exc
+
+
+@router.get("/chat/{session_id}/history")
+async def chat_history(session_id: str, settings: GatewaySettings = Depends(get_settings)):
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.get(f"{settings.agentic_service_url}/chat/{session_id}/history")
+            response.raise_for_status()
+        return JSONResponse(status_code=response.status_code, content=response.json())
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text or "Agentic service returned an error"
+        raise HTTPException(status_code=exc.response.status_code, detail=detail) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="Agentic service unavailable") from exc
+
+
+@router.delete("/chat/{session_id}")
+async def delete_chat_session(session_id: str, settings: GatewaySettings = Depends(get_settings)):
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.delete(f"{settings.agentic_service_url}/chat/{session_id}")
+            response.raise_for_status()
+        return JSONResponse(status_code=response.status_code, content=response.json())
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text or "Agentic service returned an error"
+        raise HTTPException(status_code=exc.response.status_code, detail=detail) from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=502, detail="Agentic service unavailable") from exc

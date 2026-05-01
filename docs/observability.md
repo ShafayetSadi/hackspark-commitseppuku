@@ -84,8 +84,8 @@ This is the easiest way to correlate:
 For a successful request, expect:
 
 ```json
-{"request_id":"...","method":"POST","path":"/auth/login","event":"request_started","timestamp":"...","level":"info"}
-{"request_id":"...","method":"POST","path":"/auth/login","status_code":200,"duration_ms":12.41,"event":"request_completed","timestamp":"...","level":"info"}
+{"request_id":"...","method":"POST","path":"/users/login","event":"request_started","timestamp":"...","level":"info"}
+{"request_id":"...","method":"POST","path":"/users/login","status_code":200,"duration_ms":12.41,"event":"request_completed","timestamp":"...","level":"info"}
 ```
 
 For an unhandled failure, expect:
@@ -247,7 +247,7 @@ For a judging/demo pass:
 2. Open the gateway docs at `http://localhost:8000/docs`.
 3. Execute a few requests:
    - `POST /auth/register`
-   - `POST /auth/login`
+   - `POST /users/login`
    - `GET /auth/me`
    - `POST /items`
    - `GET /items`

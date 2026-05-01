@@ -1,16 +1,44 @@
-from abc import ABC, abstractmethod
+from __future__ import annotations
 
-from ai_agent_service.services.rag.retriever import RetrievedDocument
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True, slots=True)
+class ToolDecision:
+    tool_name: str | None
+    arguments: dict[str, str]
 
 
 class BaseLLM(ABC):
     @abstractmethod
-    async def generate_answer(
+    async def generate_session_title(self, first_message: str) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def decide_tool(
         self,
-        query: str,
-        documents: list[RetrievedDocument],
-        context: str,
-        history: list[dict] | None = None,
-    ) -> tuple[str, list[str], float]:
-        """Return (answer, sources, confidence)."""
+        session_summary: str,
+        recent_messages: list[dict],
+        current_message: str,
+        tools: list[dict],
+    ) -> ToolDecision:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def generate_final_answer(
+        self,
+        session_summary: str,
+        recent_messages: list[dict],
+        current_message: str,
+        tool_result: dict | None,
+    ) -> str:
+        raise NotImplementedError
+
+    @abstractmethod
+    async def summarize_session(
+        self,
+        current_summary: str,
+        recent_messages: list[dict],
+    ) -> str:
         raise NotImplementedError

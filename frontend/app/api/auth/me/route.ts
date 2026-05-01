@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
   let upstreamResponse: Response;
 
   try {
-    upstreamResponse = await fetch(`${getGatewayUrl()}/auth/me`, {
+    upstreamResponse = await fetch(`${getGatewayUrl()}/users/me`, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -60,8 +60,13 @@ export async function GET(request: NextRequest) {
   const userPayload = (await upstreamResponse.json()) as {
     id: number;
     email: string;
-    full_name: string;
+    name?: string;
+    full_name?: string;
   };
 
-  return NextResponse.json(userPayload);
+  return NextResponse.json({
+    id: userPayload.id,
+    email: userPayload.email,
+    full_name: userPayload.name ?? userPayload.full_name ?? "",
+  });
 }

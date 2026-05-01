@@ -11,16 +11,16 @@ def get_llm(settings: AIAgentSettings) -> BaseLLM:
     if provider == "gemini":
         from ai_agent_service.services.llm.gemini import GeminiLLM
 
-        return GeminiLLM(settings.gemini_api_key)
+        return GeminiLLM(settings.gemini_api_key, settings.gemini_model)
 
     if provider == "openai":
         from ai_agent_service.services.llm.openai_llm import OpenAILLM
 
-        return OpenAILLM(settings.openai_api_key)
+        return OpenAILLM(settings.openai_api_key, settings.openai_model)
 
     if provider == "groq":
         from ai_agent_service.services.llm.groq_llm import GroqLLM
 
-        return GroqLLM(settings.groq_api_key)
+        return GroqLLM(settings.groq_api_key, settings.groq_model)
 
     return MockLLM()
