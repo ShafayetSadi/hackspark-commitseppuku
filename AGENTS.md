@@ -14,7 +14,7 @@ RentPi hackathon — FastAPI HTTP gateway + 4 services that expose HTTP status r
 | `user-service/` | `user-service` | HTTP + gRPC | 8001 / 50051 | Auth (register/login/me), Postgres, Alembic |
 | `rental-service/` | `rental-service` | HTTP + gRPC | 8002 / 50052 | Products/availability — proxies Central API |
 | `analytics-service/` | `analytics-service` | HTTP + gRPC | 8003 / 50053 | Trend analysis, surge detection, recommendations |
-| `agentic-service/` | `agentic-service` | HTTP + gRPC | 8004 / 50054 | AI chatbot, MongoDB session store |
+| `agentic-service/` | `agentic-service` | HTTP + gRPC | 8004 / 50054 | AI chatbot, MongoDB session store, gRPC grounding via analytics/rental |
 | `frontend/` | `frontend` | HTTP | 3000 | Next.js UI, talks only through api-gateway |
 
 Python packages **inside** each folder keep their original names:
@@ -82,6 +82,8 @@ Client → api-gateway:8000 (HTTP/JSON)
             → gRPC → rental-service:50052     → Central API (rate-limited)
             → gRPC → analytics-service:50053  → Central API (rate-limited)
             → gRPC → agentic-service:50054    → MongoDB + LLM
+                                        ↘ gRPC → rental-service:50052
+                                        ↘ gRPC → analytics-service:50053
 ```
 
 ### Gateway public paths (no JWT required)
@@ -165,6 +167,7 @@ data = await client.get("/api/data/products", params={"category": "TOOLS"})
 ```
 
 `CentralAPIClient` uses a sliding-window rate limiter that blocks callers (backpressure) when the limit would be exceeded.
+On a `429`, it retries with the shared exponential-backoff-with-jitter policy and finally raises the required structured `503` payload after 3 failed retries.
 
 ### Token rules
 

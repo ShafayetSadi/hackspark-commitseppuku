@@ -16,6 +16,9 @@ def _central_client(settings: AnalyticsSettings) -> CentralAPIClient:
     return CentralAPIClient(
         settings.central_api_url,
         settings.central_api_token,
+        redis_url=settings.central_api_redis_url,
+        max_calls=settings.central_api_rate_limit,
+        window_seconds=settings.central_api_rate_window_seconds,
     )
 
 

@@ -259,11 +259,15 @@ async def get_user_top_categories(
         if category is not None:
             counts[category] += 1
 
-    ranked = sorted(counts.items(), key=lambda item: (-item[1], item[0]))[:k]
+    heap: list[tuple[int, tuple[int, ...], str]] = []
+    for category, count in counts.items():
+        push_bounded(heap, (count, _category_rank_key(category), category), k)
+
+    ranked = sorted(heap, key=lambda item: (-item[0], item[2]))
     return {
         "userId": user_id,
         "topCategories": [
-            {"category": category, "rentalCount": count} for category, count in ranked
+            {"category": category, "rentalCount": count} for count, _, category in ranked
         ],
     }
 

@@ -1,5 +1,6 @@
 """Analytics computations over Central API product and rental data."""
 
+import heapq
 from collections import Counter
 from collections.abc import Iterable
 from datetime import date, timedelta
@@ -289,13 +290,12 @@ async def compute_recommendations(
     if not seasonal_counts:
         return {"date": target_date, "recommendations": []}
 
-    ranked_product_ids = [
-        product_id
-        for product_id, _score in sorted(
-            seasonal_counts.items(),
-            key=lambda item: (-item[1], item[0]),
-        )[:limit]
-    ]
+    top_items = heapq.nlargest(
+        limit,
+        seasonal_counts.items(),
+        key=lambda item: (item[1], -item[0]),
+    )
+    ranked_product_ids = [product_id for product_id, _score in top_items]
 
     product_details: dict[int, dict] = {}
     for product_batch in _chunked(ranked_product_ids, PRODUCT_BATCH_SIZE):

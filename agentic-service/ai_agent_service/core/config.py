@@ -7,6 +7,8 @@ class AIAgentSettings(CommonSettings):
     service_name: str = "agentic-service"
     service_port: int = 8004
     grpc_port: int = 50054
+    rental_service_addr: str = "rental-service:50052"
+    analytics_service_addr: str = "analytics-service:50053"
     llm_provider: str = "mock"
     min_relevance_score: float = 0.2
     redis_url: str = "redis://redis:6379/0"
