@@ -17,7 +17,10 @@ logger = get_logger(settings.service_name)
 
 
 async def serve() -> None:
-    session_store.init_mongo(settings.mongo_uri)
+    session_store.init_redis(
+        settings.redis_url,
+        ttl_seconds=settings.redis_session_ttl_seconds,
+    )
 
     server = grpc.aio.server()
     agentic_pb2_grpc.add_AgenticServiceServicer_to_server(AgenticServicer(), server)
